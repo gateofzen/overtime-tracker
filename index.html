@@ -1,0 +1,1878 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f5f1ea">
+<title>時間外勤務管理</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  /* ==================================================
+     Design tokens — Japanese clinical minimal
+     ================================================== */
+  :root {
+    --paper: #f5f1ea;
+    --paper-soft: #ede8df;
+    --paper-card: #fbf8f2;
+    --ink: #1a1a18;
+    --ink-soft: #4a4a45;
+    --ink-mute: #8a877f;
+    --line: #d9d4c7;
+    --line-soft: #e8e3d6;
+    --terracotta: #b04a36;
+    --terracotta-soft: #c66547;
+    --moss: #4a6b3d;
+    --moss-soft: #6b8c5e;
+    --gold: #b8893a;
+    --serif: 'Shippori Mincho', 'Yu Mincho', serif;
+    --sans: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    --mono: 'JetBrains Mono', 'SF Mono', Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--paper);
+    background-image:
+      radial-gradient(circle at 25% 15%, rgba(176, 74, 54, 0.025) 0%, transparent 35%),
+      radial-gradient(circle at 75% 85%, rgba(74, 107, 61, 0.02) 0%, transparent 40%);
+    min-height: 100vh;
+    line-height: 1.6;
+    font-size: 15px;
+    letter-spacing: 0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Subtle paper grain */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.1 0 0 0 0 0.1 0 0 0 0 0.1 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity: 0.5;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 580px;
+    margin: 0 auto;
+    padding: 28px 20px 120px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ==================================================
+     Typography
+     ================================================== */
+  h1, h2, h3 {
+    font-family: var(--serif);
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+  }
+
+  .app-title {
+    font-size: 24px;
+    line-height: 1.3;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 28px;
+  }
+  .app-title .glyph {
+    font-size: 28px;
+    color: var(--terracotta);
+  }
+  .app-title .meta {
+    margin-left: auto;
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  h2.section-title {
+    font-size: 18px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2.section-title::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 16px;
+    background: var(--terracotta);
+  }
+
+  .label {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-mute);
+    margin-bottom: 8px;
+  }
+
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .ink-soft { color: var(--ink-soft); }
+  .ink-mute { color: var(--ink-mute); }
+
+  /* ==================================================
+     Card
+     ================================================== */
+  .card {
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    padding: 22px;
+    margin-bottom: 18px;
+    position: relative;
+  }
+  .card.tight { padding: 16px 18px; }
+
+  /* ==================================================
+     Doctor selection
+     ================================================== */
+  .doctor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .doctor-btn {
+    font-family: var(--serif);
+    font-size: 22px;
+    font-weight: 500;
+    padding: 22px 8px;
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    letter-spacing: 0.05em;
+  }
+  .doctor-btn:hover, .doctor-btn:focus-visible {
+    background: var(--paper-soft);
+    border-color: var(--ink-soft);
+    outline: none;
+  }
+  .doctor-btn:active {
+    transform: scale(0.98);
+  }
+  .doctor-btn.selected {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+
+  /* ==================================================
+     Doctor banner
+     ================================================== */
+  .doctor-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    background: var(--ink);
+    color: var(--paper);
+    margin-bottom: 22px;
+  }
+  .doctor-banner .name {
+    font-family: var(--serif);
+    font-size: 19px;
+    letter-spacing: 0.08em;
+  }
+  .doctor-banner .name::before {
+    content: '医師　';
+    font-family: var(--sans);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--ink-mute);
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+  .change-btn {
+    background: transparent;
+    color: var(--paper);
+    border: 1px solid var(--ink-mute);
+    padding: 6px 12px;
+    font-size: 11px;
+    font-family: var(--sans);
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .change-btn:hover { background: rgba(255,255,255,0.08); }
+
+  /* ==================================================
+     Clock display
+     ================================================== */
+  .clock-display {
+    text-align: center;
+    padding: 18px 16px 22px;
+  }
+  .now-time {
+    font-family: var(--mono);
+    font-size: 56px;
+    font-weight: 500;
+    line-height: 1;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .now-date {
+    margin-top: 8px;
+    font-size: 13px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+  }
+
+  .status-strip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 14px 0 4px;
+    font-size: 13px;
+  }
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--ink-mute);
+  }
+  .status-dot.active {
+    background: var(--terracotta);
+    box-shadow: 0 0 0 4px rgba(176, 74, 54, 0.15);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(176, 74, 54, 0.15); }
+    50% { box-shadow: 0 0 0 8px rgba(176, 74, 54, 0.05); }
+  }
+  .status-text { color: var(--ink-soft); }
+  .status-text strong { color: var(--ink); font-weight: 500; }
+
+  /* ==================================================
+     Big action button
+     ================================================== */
+  .big-btn {
+    width: 100%;
+    margin-top: 18px;
+    padding: 26px;
+    font-family: var(--serif);
+    font-size: 26px;
+    font-weight: 500;
+    letter-spacing: 0.3em;
+    background: var(--moss);
+    color: var(--paper);
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-indent: 0.3em;
+  }
+  .big-btn.clock-out {
+    background: var(--terracotta);
+  }
+  .big-btn:hover {
+    transform: translateY(-1px);
+  }
+  .big-btn:active {
+    transform: translateY(0);
+    filter: brightness(0.92);
+  }
+  .big-btn:disabled {
+    background: var(--ink-mute);
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ==================================================
+     History
+     ================================================== */
+  details.section {
+    margin-top: 18px;
+    border: 1px solid var(--line);
+    background: var(--paper-card);
+  }
+  details.section summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 14px 18px;
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  details.section summary::-webkit-details-marker { display: none; }
+  details.section summary::after {
+    content: '＋';
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--ink-mute);
+    transition: transform 0.2s ease;
+  }
+  details.section[open] summary::after {
+    transform: rotate(45deg);
+  }
+  details.section .body {
+    padding: 0 18px 18px;
+  }
+
+  .shift-list {
+    border-top: 1px solid var(--line-soft);
+  }
+  .shift-row {
+    display: grid;
+    grid-template-columns: 64px 1fr 1fr auto;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line-soft);
+    font-size: 13px;
+    align-items: center;
+  }
+  .shift-row .date {
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--ink);
+  }
+  .shift-row .date small {
+    display: block;
+    font-family: var(--sans);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+  }
+  .shift-row .time {
+    font-family: var(--mono);
+    font-size: 14px;
+  }
+  .shift-row .time .label-tiny {
+    display: block;
+    font-family: var(--sans);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--ink-mute);
+    margin-bottom: 2px;
+  }
+  .shift-row .actions {
+    display: flex;
+    gap: 4px;
+  }
+  .icon-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    padding: 4px 8px;
+    font-size: 11px;
+    font-family: var(--sans);
+    cursor: pointer;
+  }
+  .icon-btn:hover { background: var(--paper-soft); }
+  .icon-btn.danger:hover { background: var(--terracotta); color: var(--paper); border-color: var(--terracotta); }
+
+  .empty-state {
+    text-align: center;
+    padding: 24px 10px;
+    color: var(--ink-mute);
+    font-size: 13px;
+  }
+
+  /* ==================================================
+     Forms
+     ================================================== */
+  .field {
+    margin-bottom: 14px;
+  }
+  .field label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-mute);
+    margin-bottom: 6px;
+  }
+  input[type="text"], input[type="url"], input[type="datetime-local"], input[type="date"], input[type="time"], textarea, select {
+    width: 100%;
+    padding: 10px 12px;
+    font-family: var(--sans);
+    font-size: 14px;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    transition: border 0.15s;
+  }
+  input:focus, textarea:focus, select:focus {
+    outline: none;
+    border-color: var(--ink-soft);
+  }
+  textarea { font-family: var(--mono); font-size: 12px; min-height: 90px; resize: vertical; }
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .btn {
+    padding: 10px 18px;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    background: var(--ink);
+    color: var(--paper);
+    border: 1px solid var(--ink);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn:hover { background: var(--ink-soft); border-color: var(--ink-soft); }
+  .btn:disabled { background: var(--ink-mute); border-color: var(--ink-mute); cursor: not-allowed; }
+  .btn.outline {
+    background: transparent;
+    color: var(--ink);
+  }
+  .btn.outline:hover { background: var(--paper-soft); }
+  .btn.accent {
+    background: var(--terracotta);
+    border-color: var(--terracotta);
+  }
+  .btn.accent:hover { background: var(--terracotta-soft); border-color: var(--terracotta-soft); }
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* ==================================================
+     Excel processing
+     ================================================== */
+  .excel-step {
+    margin-bottom: 20px;
+    padding-bottom: 18px;
+    border-bottom: 1px dashed var(--line);
+  }
+  .excel-step:last-child { border: none; padding-bottom: 0; }
+  .excel-step .step-num {
+    font-family: var(--serif);
+    font-size: 13px;
+    color: var(--terracotta);
+    letter-spacing: 0.2em;
+    margin-bottom: 4px;
+  }
+  .excel-step .step-title {
+    font-family: var(--serif);
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+  .file-input-wrap {
+    border: 1px dashed var(--line);
+    padding: 14px;
+    background: var(--paper);
+    text-align: center;
+    cursor: pointer;
+    position: relative;
+    transition: border 0.15s;
+  }
+  .file-input-wrap:hover {
+    border-color: var(--ink-soft);
+  }
+  .file-input-wrap input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .file-input-wrap .hint {
+    font-size: 12px;
+    color: var(--ink-mute);
+  }
+  .file-input-wrap .filename {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--ink);
+    margin-top: 4px;
+  }
+
+  .info-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    background: var(--paper-soft);
+    border: 1px solid var(--line);
+    font-size: 11px;
+    font-family: var(--sans);
+    color: var(--ink-soft);
+    letter-spacing: 0.05em;
+    margin-right: 6px;
+  }
+  .info-pill.success { border-color: var(--moss); color: var(--moss); }
+  .info-pill.error { border-color: var(--terracotta); color: var(--terracotta); }
+
+  .preview-table {
+    width: 100%;
+    margin-top: 12px;
+    border-collapse: collapse;
+    font-size: 12px;
+    font-family: var(--mono);
+  }
+  .preview-table th, .preview-table td {
+    padding: 6px 8px;
+    border: 1px solid var(--line-soft);
+    text-align: left;
+  }
+  .preview-table th {
+    background: var(--paper-soft);
+    font-family: var(--sans);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 500;
+  }
+  .preview-table td.shift { font-family: var(--sans); font-size: 12px; }
+  .preview-table tr.weekend td:first-child { color: var(--terracotta); }
+  .preview-wrap {
+    max-height: 360px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+  }
+
+  /* ==================================================
+     Bottom nav
+     ================================================== */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--paper-card);
+    border-top: 1px solid var(--line);
+    display: flex;
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .bottom-nav button {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 14px 8px 12px;
+    font-family: var(--sans);
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    border-top: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .bottom-nav button .nav-icon {
+    display: block;
+    font-size: 19px;
+    margin-bottom: 4px;
+    line-height: 1;
+  }
+  .bottom-nav button.active {
+    color: var(--terracotta);
+    border-top-color: var(--terracotta);
+  }
+
+  /* ==================================================
+     Toast / Modal
+     ================================================== */
+  .toast {
+    position: fixed;
+    bottom: 88px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 22px;
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    opacity: 0;
+    transition: all 0.3s ease;
+    pointer-events: none;
+    z-index: 200;
+    max-width: 90vw;
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  .toast.error { background: var(--terracotta); }
+  .toast.success { background: var(--moss); }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(26, 26, 24, 0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 150;
+    padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    padding: 24px;
+    width: 100%;
+    max-width: 420px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal h3 {
+    font-size: 18px;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  .modal .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+    justify-content: flex-end;
+  }
+
+  /* ==================================================
+     Section toggling
+     ================================================== */
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* ==================================================
+     Responsive tweaks
+     ================================================== */
+  @media (min-width: 600px) {
+    .doctor-grid { grid-template-columns: repeat(3, 1fr); }
+    .now-time { font-size: 64px; }
+  }
+  @media (max-width: 380px) {
+    .container { padding: 20px 14px 110px; }
+    .now-time { font-size: 44px; }
+    .big-btn { font-size: 22px; padding: 22px; }
+    .doctor-btn { font-size: 19px; padding: 18px 4px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- ===== Header ===== -->
+  <header class="app-title">
+    <span class="glyph">時</span>
+    <span>時間外勤務管理</span>
+    <span class="meta">v1.0</span>
+  </header>
+
+  <!-- ===== View: Doctor selection ===== -->
+  <div class="view" id="view-select">
+    <div class="card">
+      <h2 class="section-title">医師を選択</h2>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:18px;">あなたの名前をタップしてください。次回以降は自動で復元されます。</p>
+      <div class="doctor-grid" id="doctor-grid"></div>
+    </div>
+  </div>
+
+  <!-- ===== View: Clock in/out ===== -->
+  <div class="view" id="view-clock">
+    <div class="doctor-banner">
+      <span class="name" id="doctor-name-clock"></span>
+      <button class="change-btn" data-action="change-doctor">医師変更</button>
+    </div>
+
+    <div class="card">
+      <div class="clock-display">
+        <div class="now-time" id="now-time">--:--</div>
+        <div class="now-date" id="now-date">----/--/-- (-)</div>
+        <div class="status-strip">
+          <span class="status-dot" id="status-dot"></span>
+          <span class="status-text" id="status-text">勤務外</span>
+        </div>
+      </div>
+      <button class="big-btn" id="clock-toggle">出　勤</button>
+    </div>
+
+    <details class="section">
+      <summary>打刻履歴・編集</summary>
+      <div class="body">
+        <div id="shifts-list"></div>
+        <div class="btn-row" style="margin-top:14px;">
+          <button class="btn outline" data-action="add-manual">手動で追加</button>
+          <button class="btn outline" data-action="show-all-shifts">全件表示</button>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <!-- ===== View: Excel processing ===== -->
+  <div class="view" id="view-excel">
+    <div class="doctor-banner">
+      <span class="name" id="doctor-name-excel"></span>
+      <button class="change-btn" data-action="change-doctor">医師変更</button>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">エクセル自動入力</h2>
+
+      <div class="excel-step">
+        <div class="step-num">STEP 01</div>
+        <div class="step-title">時間外管理.xlsx をアップロード</div>
+        <label class="file-input-wrap">
+          <input type="file" id="excel-input" accept=".xlsx,.xlsm">
+          <div class="hint" id="excel-hint">タップしてファイルを選択</div>
+          <div class="filename" id="excel-filename"></div>
+        </label>
+        <div id="excel-info" style="margin-top:8px;"></div>
+      </div>
+
+      <div class="excel-step">
+        <div class="step-num">STEP 02</div>
+        <div class="step-title">勤務表データを取得</div>
+        <div id="schedule-info">
+          <span class="info-pill" id="schedule-pill">未取得</span>
+        </div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn outline" data-action="fetch-schedule">URL から取得</button>
+          <label class="btn outline" style="display:inline-block;cursor:pointer;">
+            JSON アップロード
+            <input type="file" id="schedule-file" accept=".json,application/json" hidden>
+          </label>
+          <button class="btn outline" data-action="paste-schedule">JSON ペースト</button>
+        </div>
+      </div>
+
+      <div class="excel-step">
+        <div class="step-num">STEP 03</div>
+        <div class="step-title">プレビュー</div>
+        <div id="preview-area">
+          <p class="empty-state">上記2つを準備するとプレビューが表示されます</p>
+        </div>
+      </div>
+
+      <button class="btn accent" id="generate-btn" disabled style="width:100%;padding:16px;font-size:14px;letter-spacing:0.2em;">生成してダウンロード</button>
+    </div>
+  </div>
+
+  <!-- ===== View: Settings ===== -->
+  <div class="view" id="view-settings">
+    <div class="doctor-banner" id="settings-banner" style="display:none;">
+      <span class="name" id="doctor-name-settings"></span>
+      <button class="change-btn" data-action="change-doctor">医師変更</button>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">設定</h2>
+
+      <div class="field">
+        <label>勤務表データの取得URL (ベース)</label>
+        <input type="url" id="schedule-base-url" placeholder="https://raw.githubusercontent.com/USER/REPO/main/">
+        <p class="ink-mute" style="font-size:11px;margin-top:6px;">
+          このベースURLに <code class="mono">month_YYYY-MM.json</code> を付けて取得します。<br>
+          例: 2026年5月 → <span class="mono" id="url-example">…/month_2026-05.json</span>
+        </p>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" data-action="save-settings">保存</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">データ管理</h2>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        この端末に保存されているデータを操作できます。
+      </p>
+      <div class="btn-row">
+        <button class="btn outline" data-action="export-data">エクスポート (バックアップ)</button>
+        <button class="btn outline" data-action="import-data">インポート</button>
+        <button class="btn outline" data-action="clear-data" style="color:var(--terracotta);border-color:var(--terracotta);">全消去</button>
+      </div>
+      <input type="file" id="import-file" accept=".json" hidden>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">ルール定義</h2>
+      <table class="preview-table" style="font-size:11px;">
+        <thead>
+          <tr><th>項目</th><th>日勤</th><th>夜勤・25勤</th><th>明</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>勤務開始前</td>
+            <td>出勤〜8:30 (最大30分)</td>
+            <td>出勤〜16:30 (最大30分)</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>時間外開始</td>
+            <td>17:30</td>
+            <td>—</td>
+            <td>9:30</td>
+          </tr>
+          <tr>
+            <td>時間外終了</td>
+            <td>退勤時刻</td>
+            <td>—</td>
+            <td>退勤時刻 (前夜の)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ===== Bottom nav ===== -->
+<nav class="bottom-nav" id="bottom-nav" style="display:none;">
+  <button data-view="clock"><span class="nav-icon">⏱</span>打　刻</button>
+  <button data-view="excel"><span class="nav-icon">📋</span>集　計</button>
+  <button data-view="settings"><span class="nav-icon">⚙</span>設　定</button>
+</nav>
+
+<!-- ===== Toast ===== -->
+<div class="toast" id="toast"></div>
+
+<!-- ===== Modal ===== -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<!-- ===== Libs ===== -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+<script>
+'use strict';
+
+/* ==================================================
+   Constants
+   ================================================== */
+const DOCTORS = ['前川', '提嶋', '遠藤', '小舘', '森木', '中嶋', '上島', '原', '富田'];
+const STORAGE_KEYS = {
+  doctor:   'overtime_current_doctor',
+  settings: 'overtime_settings',
+  shifts:   (doc) => `overtime_shifts_${doc}`,
+};
+const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
+
+/* Time helpers ----------------------------------- */
+const MIN_PER_DAY = 24 * 60;
+const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
+const CAP_30MIN = 30 / MIN_PER_DAY;
+
+/* Schedule keys → shift type */
+const SCHEDULE_KEYS = [
+  ['day', '日勤'],
+  ['night', '夜勤'],
+  ['ake', '明'],
+  ['off', '休'],
+  ['trip', '出張'],
+];
+
+/* ==================================================
+   State
+   ================================================== */
+const state = {
+  currentDoctor: null,
+  currentView: 'select',
+  shifts: [],          // [{id, clockIn:ISO, clockOut:ISO|null}, ...]
+  settings: { scheduleBaseUrl: '' },
+  excelFile: null,
+  excelMeta: null,     // {sheets: [{name, year, month}, ...]}
+  scheduleData: null,  // {year, month, days:{...}}
+  scheduleSource: null,// 'url' | 'file' | 'paste'
+};
+
+/* ==================================================
+   Storage
+   ================================================== */
+function storageGet(key, fallback = null) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+function storageSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.error(e); }
+}
+
+function loadSettings() {
+  state.settings = storageGet(STORAGE_KEYS.settings, { scheduleBaseUrl: '' });
+}
+function saveSettings() {
+  storageSet(STORAGE_KEYS.settings, state.settings);
+}
+
+function loadDoctorState() {
+  state.currentDoctor = storageGet(STORAGE_KEYS.doctor);
+  if (state.currentDoctor) {
+    state.shifts = storageGet(STORAGE_KEYS.shifts(state.currentDoctor), []);
+  }
+}
+function saveCurrentDoctor() {
+  storageSet(STORAGE_KEYS.doctor, state.currentDoctor);
+}
+function saveShifts() {
+  if (!state.currentDoctor) return;
+  storageSet(STORAGE_KEYS.shifts(state.currentDoctor), state.shifts);
+}
+
+/* ==================================================
+   Time / date utilities
+   ================================================== */
+function pad(n) { return String(n).padStart(2, '0'); }
+
+function formatDateKey(d) {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function formatDateDisplay(d) {
+  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
+}
+function formatWeekday(d) {
+  return WEEKDAY_JP[d.getDay()];
+}
+function formatTime(d) {
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function formatDateTimeFull(d) {
+  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${formatWeekday(d)} ${formatTime(d)}`;
+}
+function timeOfDayFraction(d) {
+  return FRACTION(d.getHours(), d.getMinutes());
+}
+function dateOnly(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+/* ==================================================
+   Shift sessions
+   ================================================== */
+function getOpenShift() {
+  return state.shifts.find(s => s.clockIn && !s.clockOut) || null;
+}
+
+function clockIn() {
+  const open = getOpenShift();
+  if (open) {
+    toast('既に出勤中です。退勤を押してから再度出勤してください。', 'error');
+    return;
+  }
+  state.shifts.push({
+    id: 'sh_' + Date.now(),
+    clockIn: new Date().toISOString(),
+    clockOut: null,
+  });
+  saveShifts();
+  toast('出勤を記録しました', 'success');
+  renderClock();
+}
+
+function clockOut() {
+  const open = getOpenShift();
+  if (!open) {
+    toast('出勤記録がありません', 'error');
+    return;
+  }
+  open.clockOut = new Date().toISOString();
+  saveShifts();
+  toast('退勤を記録しました', 'success');
+  renderClock();
+}
+
+function deleteShift(id) {
+  state.shifts = state.shifts.filter(s => s.id !== id);
+  saveShifts();
+  renderClock();
+}
+
+/* Find session associated with a shift type on a given date */
+function findSessionForDate(dateKey, role) {
+  // role:
+  //   'start' → session whose clockIn is on dateKey (日勤・夜勤・25勤の打刻日)
+  //   'wake'  → session whose clockIn is on (dateKey - 1 day)  (明 day uses prev day's session)
+  if (role === 'start') {
+    return state.shifts.find(s =>
+      s.clockIn && formatDateKey(new Date(s.clockIn)) === dateKey
+    );
+  }
+  if (role === 'wake') {
+    const d = new Date(dateKey + 'T00:00:00');
+    const prevKey = formatDateKey(addDays(d, -1));
+    return state.shifts.find(s =>
+      s.clockIn && formatDateKey(new Date(s.clockIn)) === prevKey
+    );
+  }
+  return null;
+}
+
+/* ==================================================
+   Schedule data
+   ================================================== */
+function shiftFromSchedule(date, doctor, scheduleData) {
+  if (!scheduleData || !scheduleData.days) return null;
+  const dayKey = formatDateKey(date);
+  const day = scheduleData.days[dayKey];
+  if (!day) return null;
+  // 25勤 detection: in BOTH day and night
+  const inDay = (day.day || []).includes(doctor);
+  const inNight = (day.night || []).includes(doctor);
+  if (inDay && inNight) return '25勤';
+  if (inNight) return '夜勤';
+  if (inDay) return '日勤';
+  for (const [key, label] of SCHEDULE_KEYS.slice(2)) {
+    if ((day[key] || []).includes(doctor)) return label;
+  }
+  return null;
+}
+
+async function fetchScheduleFromUrl(year, month) {
+  const base = (state.settings.scheduleBaseUrl || '').trim();
+  if (!base) {
+    throw new Error('設定で勤務表のベースURLを指定してください');
+  }
+  const sep = base.endsWith('/') ? '' : '/';
+  const url = `${base}${sep}month_${year}-${pad(month)}.json`;
+  const res = await fetch(url, { cache: 'no-cache' });
+  if (!res.ok) {
+    throw new Error(`取得失敗 (${res.status}): ${url}`);
+  }
+  return res.json();
+}
+
+/* ==================================================
+   Excel processing
+   ================================================== */
+async function loadExcelMeta(file) {
+  const buf = await file.arrayBuffer();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  const sheets = [];
+  wb.eachSheet((ws) => {
+    const c1 = ws.getCell('C1').value;
+    const c2 = ws.getCell('C2').value;
+    const yr = (typeof c1 === 'number') ? c1 : parseInt(c1);
+    const mo = (typeof c2 === 'number') ? c2 : parseInt(c2);
+    if (yr >= 2020 && yr <= 2050 && mo >= 1 && mo <= 12) {
+      sheets.push({ name: ws.name, year: yr, month: mo });
+    }
+  });
+  return { sheets, raw: wb };
+}
+
+function preShiftOvertime(clockInDate, cutoffH, cutoffM) {
+  const inFrac = timeOfDayFraction(clockInDate);
+  const cutoff = FRACTION(cutoffH, cutoffM);
+  if (inFrac >= cutoff) return 0;
+  let ot = cutoff - inFrac;
+  if (ot > CAP_30MIN) ot = CAP_30MIN;
+  return ot;
+}
+
+function getDoctorRowsForSheet(year, month) {
+  // Returns array of {row, date, dateKey} for each day in month (rows 4..34)
+  const rows = [];
+  for (let r = 4; r <= 34; r++) {
+    const day = r - 3; // row 4 = day 1
+    const date = new Date(year, month - 1, day);
+    if (date.getMonth() !== month - 1) break; // overflow → stop
+    rows.push({ row: r, date, dateKey: formatDateKey(date) });
+  }
+  return rows;
+}
+
+function buildPreviewForSheet(year, month) {
+  const rows = getDoctorRowsForSheet(year, month);
+  return rows.map(({ row, date, dateKey }) => {
+    const shift = state.scheduleData ? shiftFromSchedule(date, state.currentDoctor, state.scheduleData) : null;
+    let D = null, E = null, F = null;
+    let session = null;
+
+    if (shift === '日勤') {
+      session = findSessionForDate(dateKey, 'start');
+      if (session?.clockIn) {
+        const ci = new Date(session.clockIn);
+        const d = preShiftOvertime(ci, 8, 30);
+        if (d > 0) D = d;
+      }
+      if (session?.clockOut) {
+        const co = new Date(session.clockOut);
+        const coF = timeOfDayFraction(co);
+        if (coF > FRACTION(17, 30)) {
+          E = FRACTION(17, 30);
+          F = coF;
+        }
+      }
+    } else if (shift === '夜勤' || shift === '25勤') {
+      session = findSessionForDate(dateKey, 'start');
+      if (session?.clockIn) {
+        const ci = new Date(session.clockIn);
+        const d = preShiftOvertime(ci, 16, 30);
+        if (d > 0) D = d;
+      }
+      // E,F not on this row
+    } else if (shift === '明') {
+      session = findSessionForDate(dateKey, 'wake');
+      if (session?.clockOut) {
+        const co = new Date(session.clockOut);
+        const coF = timeOfDayFraction(co);
+        // Always show E=9:30 if there is an out time greater than 9:30
+        if (coF > FRACTION(9, 30)) {
+          E = FRACTION(9, 30);
+          F = coF;
+        }
+      }
+    }
+    return { row, date, dateKey, shift, D, E, F, hasSession: !!session };
+  });
+}
+
+function fractionToHM(f) {
+  if (f == null) return '';
+  const total = Math.round(f * MIN_PER_DAY);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${pad(h)}:${pad(m)}`;
+}
+
+async function generateExcel() {
+  if (!state.excelFile || !state.scheduleData) return;
+
+  const buf = await state.excelFile.arrayBuffer();
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+
+  let totalFilled = 0;
+  const sheetReports = [];
+
+  wb.eachSheet((ws) => {
+    const c1 = ws.getCell('C1').value;
+    const c2 = ws.getCell('C2').value;
+    const yr = (typeof c1 === 'number') ? c1 : parseInt(c1);
+    const mo = (typeof c2 === 'number') ? c2 : parseInt(c2);
+    if (!(yr >= 2020 && yr <= 2050 && mo >= 1 && mo <= 12)) return;
+
+    // Set name (A1)
+    const a1 = ws.getCell('A1');
+    a1.value = state.currentDoctor;
+
+    let filledOnSheet = 0;
+
+    // Match against schedule data only if year/month matches
+    const sheetMatchesSchedule = (yr === state.scheduleData.year && mo === state.scheduleData.month);
+
+    const rows = getDoctorRowsForSheet(yr, mo);
+    for (const { row, date, dateKey } of rows) {
+      // Determine shift type from schedule (only if month matches)
+      const shift = sheetMatchesSchedule
+        ? shiftFromSchedule(date, state.currentDoctor, state.scheduleData)
+        : null;
+
+      if (shift) {
+        const cellC = ws.getCell(`C${row}`);
+        cellC.value = shift;
+      }
+
+      // Clear D/E/F first (so stale data is removed) — only when we have schedule
+      // info for this month, so we don't blow away manual entries on unrelated months
+      if (sheetMatchesSchedule) {
+        ws.getCell(`D${row}`).value = null;
+        ws.getCell(`E${row}`).value = null;
+        ws.getCell(`F${row}`).value = null;
+      }
+
+      // Fill D/E/F based on rules
+      let D = null, E = null, F = null;
+      const effectiveShift = shift || (ws.getCell(`C${row}`).value || '').toString();
+
+      if (effectiveShift === '日勤') {
+        const sess = findSessionForDate(dateKey, 'start');
+        if (sess?.clockIn) {
+          const ci = new Date(sess.clockIn);
+          const d = preShiftOvertime(ci, 8, 30);
+          if (d > 0) D = d;
+        }
+        if (sess?.clockOut) {
+          const co = new Date(sess.clockOut);
+          const coF = timeOfDayFraction(co);
+          if (coF > FRACTION(17, 30)) {
+            E = FRACTION(17, 30);
+            F = coF;
+          }
+        }
+      } else if (effectiveShift === '夜勤' || effectiveShift === '25勤') {
+        const sess = findSessionForDate(dateKey, 'start');
+        if (sess?.clockIn) {
+          const ci = new Date(sess.clockIn);
+          const d = preShiftOvertime(ci, 16, 30);
+          if (d > 0) D = d;
+        }
+      } else if (effectiveShift === '明') {
+        const sess = findSessionForDate(dateKey, 'wake');
+        if (sess?.clockOut) {
+          const co = new Date(sess.clockOut);
+          const coF = timeOfDayFraction(co);
+          if (coF > FRACTION(9, 30)) {
+            E = FRACTION(9, 30);
+            F = coF;
+          }
+        }
+      }
+
+      if (D != null) {
+        const c = ws.getCell(`D${row}`);
+        c.value = D;
+        c.numFmt = 'h:mm';
+        filledOnSheet++;
+      }
+      if (E != null) {
+        const c = ws.getCell(`E${row}`);
+        c.value = E;
+        c.numFmt = 'h:mm';
+      }
+      if (F != null) {
+        const c = ws.getCell(`F${row}`);
+        c.value = F;
+        c.numFmt = 'h:mm';
+      }
+    }
+
+    sheetReports.push({ name: ws.name, year: yr, month: mo, filled: filledOnSheet, matched: sheetMatchesSchedule });
+    totalFilled += filledOnSheet;
+  });
+
+  // Output
+  const out = await wb.xlsx.writeBuffer();
+  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const baseSheet = sheetReports.find(r => r.matched) || sheetReports[0];
+  const fname = baseSheet
+    ? `時間外管理_${state.currentDoctor}_${baseSheet.year}-${pad(baseSheet.month)}.xlsx`
+    : `時間外管理_${state.currentDoctor}.xlsx`;
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+  toast(`生成完了 (${totalFilled} セル更新)`, 'success');
+  return sheetReports;
+}
+
+/* ==================================================
+   Rendering
+   ================================================== */
+function renderDoctorSelect() {
+  const grid = document.getElementById('doctor-grid');
+  grid.innerHTML = '';
+  for (const d of DOCTORS) {
+    const btn = document.createElement('button');
+    btn.className = 'doctor-btn';
+    btn.textContent = d;
+    if (state.currentDoctor === d) btn.classList.add('selected');
+    btn.addEventListener('click', () => selectDoctor(d));
+    grid.appendChild(btn);
+  }
+}
+
+function renderClock() {
+  if (!state.currentDoctor) return;
+
+  document.getElementById('doctor-name-clock').textContent = state.currentDoctor;
+  document.getElementById('doctor-name-excel').textContent = state.currentDoctor;
+  document.getElementById('doctor-name-settings').textContent = state.currentDoctor;
+  document.getElementById('settings-banner').style.display = '';
+
+  // Clock display
+  const now = new Date();
+  document.getElementById('now-time').textContent = formatTime(now);
+  document.getElementById('now-date').textContent =
+    `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} (${formatWeekday(now)})`;
+
+  // Clock toggle button
+  const open = getOpenShift();
+  const btn = document.getElementById('clock-toggle');
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if (open) {
+    btn.textContent = '退　勤';
+    btn.className = 'big-btn clock-out';
+    dot.classList.add('active');
+    const ci = new Date(open.clockIn);
+    txt.innerHTML = `勤務中　<strong>${formatDateTimeFull(ci)}</strong> 〜`;
+  } else {
+    btn.textContent = '出　勤';
+    btn.className = 'big-btn';
+    dot.classList.remove('active');
+    txt.textContent = '勤務外';
+  }
+
+  // Recent shifts (last 5)
+  renderShiftsList(5);
+}
+
+function renderShiftsList(limit = null) {
+  const list = document.getElementById('shifts-list');
+  list.innerHTML = '';
+  const sorted = [...state.shifts].sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
+  const items = limit ? sorted.slice(0, limit) : sorted;
+
+  if (items.length === 0) {
+    list.innerHTML = '<p class="empty-state">打刻履歴はまだありません</p>';
+    return;
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'shift-list';
+  for (const s of items) {
+    const ci = new Date(s.clockIn);
+    const co = s.clockOut ? new Date(s.clockOut) : null;
+    const row = document.createElement('div');
+    row.className = 'shift-row';
+    row.innerHTML = `
+      <div class="date">${formatDateDisplay(ci)}<small>${formatWeekday(ci)}曜</small></div>
+      <div class="time"><span class="label-tiny">出勤</span>${formatTime(ci)}</div>
+      <div class="time"><span class="label-tiny">退勤</span>${co ? formatTime(co) + (formatDateKey(ci) !== formatDateKey(co) ? ' <span style="font-size:9px;color:var(--ink-mute)">(翌)</span>' : '') : '<span style="color:var(--ink-mute)">未</span>'}</div>
+      <div class="actions">
+        <button class="icon-btn" data-edit-shift="${s.id}">編集</button>
+        <button class="icon-btn danger" data-del-shift="${s.id}">削除</button>
+      </div>
+    `;
+    wrap.appendChild(row);
+  }
+  list.appendChild(wrap);
+
+  // Bind events
+  list.querySelectorAll('[data-del-shift]').forEach(b => {
+    b.addEventListener('click', () => {
+      if (confirm('この打刻を削除しますか?')) deleteShift(b.dataset.delShift);
+    });
+  });
+  list.querySelectorAll('[data-edit-shift]').forEach(b => {
+    b.addEventListener('click', () => openShiftEditor(b.dataset.editShift));
+  });
+}
+
+/* Excel preview */
+function renderPreview() {
+  const area = document.getElementById('preview-area');
+  if (!state.excelFile || !state.scheduleData) {
+    area.innerHTML = '<p class="empty-state">エクセルと勤務表データの両方が必要です</p>';
+    document.getElementById('generate-btn').disabled = true;
+    return;
+  }
+
+  const sched = state.scheduleData;
+  const previews = buildPreviewForSheet(sched.year, sched.month);
+
+  let countD = 0, countE = 0, countF = 0, countShift = 0;
+  for (const p of previews) {
+    if (p.shift) countShift++;
+    if (p.D != null) countD++;
+    if (p.E != null) countE++;
+    if (p.F != null) countF++;
+  }
+
+  let html = `
+    <div style="margin-bottom:10px;">
+      <span class="info-pill success">${sched.year}年${sched.month}月</span>
+      <span class="info-pill">勤務 ${countShift}日</span>
+      <span class="info-pill">D ${countD}件</span>
+      <span class="info-pill">E ${countE}件</span>
+      <span class="info-pill">F ${countF}件</span>
+    </div>
+    <div class="preview-wrap">
+      <table class="preview-table">
+        <thead>
+          <tr><th>日</th><th>曜</th><th>勤務</th><th>D 開始前</th><th>E 開始</th><th>F 終了</th></tr>
+        </thead>
+        <tbody>
+  `;
+  for (const p of previews) {
+    const wd = p.date.getDay();
+    const cls = (wd === 0 || wd === 6) ? 'weekend' : '';
+    html += `
+      <tr class="${cls}">
+        <td>${p.date.getDate()}</td>
+        <td>${formatWeekday(p.date)}</td>
+        <td class="shift">${p.shift || ''}</td>
+        <td>${fractionToHM(p.D)}</td>
+        <td>${fractionToHM(p.E)}</td>
+        <td>${fractionToHM(p.F)}</td>
+      </tr>
+    `;
+  }
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
+  document.getElementById('generate-btn').disabled = false;
+}
+
+/* ==================================================
+   Modal: shift editor
+   ================================================== */
+function openShiftEditor(id, isNew = false) {
+  let shift;
+  if (isNew) {
+    const now = new Date();
+    shift = { id: 'sh_' + Date.now(), clockIn: now.toISOString(), clockOut: null };
+  } else {
+    shift = state.shifts.find(s => s.id === id);
+    if (!shift) return;
+  }
+
+  const fmtForInput = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
+    return localISO.slice(0, 16);
+  };
+
+  showModal(`
+    <h3>${isNew ? '打刻を手動追加' : '打刻を編集'}</h3>
+    <div class="field">
+      <label>出勤日時</label>
+      <input type="datetime-local" id="edit-in" value="${fmtForInput(shift.clockIn)}">
+    </div>
+    <div class="field">
+      <label>退勤日時 (空欄=未退勤)</label>
+      <input type="datetime-local" id="edit-out" value="${fmtForInput(shift.clockOut)}">
+    </div>
+    <div class="modal-actions">
+      <button class="btn outline" data-modal-close>キャンセル</button>
+      <button class="btn" id="modal-save">保存</button>
+    </div>
+  `);
+
+  document.getElementById('modal-save').addEventListener('click', () => {
+    const inV = document.getElementById('edit-in').value;
+    const outV = document.getElementById('edit-out').value;
+    if (!inV) { toast('出勤日時は必須です', 'error'); return; }
+    shift.clockIn = new Date(inV).toISOString();
+    shift.clockOut = outV ? new Date(outV).toISOString() : null;
+
+    if (shift.clockOut && new Date(shift.clockOut) < new Date(shift.clockIn)) {
+      toast('退勤が出勤より前です', 'error'); return;
+    }
+
+    if (isNew) state.shifts.push(shift);
+    saveShifts();
+    closeModal();
+    renderClock();
+    toast('保存しました', 'success');
+  });
+}
+
+function showAllShifts() {
+  let html = '<h3>全打刻履歴</h3><div id="all-shifts-list"></div>';
+  html += '<div class="modal-actions"><button class="btn outline" data-modal-close>閉じる</button></div>';
+  showModal(html);
+  // Re-render shifts list inside modal
+  const tmpList = document.getElementById('all-shifts-list');
+  const sorted = [...state.shifts].sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
+  if (sorted.length === 0) {
+    tmpList.innerHTML = '<p class="empty-state">履歴なし</p>';
+    return;
+  }
+  let h = '<div class="shift-list">';
+  for (const s of sorted) {
+    const ci = new Date(s.clockIn);
+    const co = s.clockOut ? new Date(s.clockOut) : null;
+    h += `
+      <div class="shift-row">
+        <div class="date">${formatDateDisplay(ci)}<small>${formatWeekday(ci)}曜</small></div>
+        <div class="time"><span class="label-tiny">出勤</span>${formatTime(ci)}</div>
+        <div class="time"><span class="label-tiny">退勤</span>${co ? formatTime(co) : '<span style="color:var(--ink-mute)">未</span>'}</div>
+        <div class="actions"><button class="icon-btn danger" data-del-shift="${s.id}">削除</button></div>
+      </div>
+    `;
+  }
+  h += '</div>';
+  tmpList.innerHTML = h;
+  tmpList.querySelectorAll('[data-del-shift]').forEach(b => {
+    b.addEventListener('click', () => {
+      if (confirm('削除しますか?')) {
+        deleteShift(b.dataset.delShift);
+        showAllShifts(); // re-open
+      }
+    });
+  });
+}
+
+/* ==================================================
+   Modal helpers
+   ================================================== */
+function showModal(html) {
+  const m = document.getElementById('modal');
+  document.getElementById('modal-content').innerHTML = html;
+  m.classList.add('show');
+  m.querySelectorAll('[data-modal-close]').forEach(b => {
+    b.addEventListener('click', closeModal);
+  });
+}
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+/* ==================================================
+   Toast
+   ================================================== */
+let toastTimer = null;
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+/* ==================================================
+   View navigation
+   ================================================== */
+function showView(name) {
+  state.currentView = name;
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+
+  const nav = document.getElementById('bottom-nav');
+  if (name === 'select') {
+    nav.style.display = 'none';
+  } else {
+    nav.style.display = '';
+    nav.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === name);
+    });
+  }
+
+  if (name === 'clock') renderClock();
+  if (name === 'excel') {
+    renderClock(); // updates banner
+    renderPreview();
+  }
+  if (name === 'settings') {
+    document.getElementById('schedule-base-url').value = state.settings.scheduleBaseUrl || '';
+    updateUrlExample();
+  }
+}
+
+function selectDoctor(name) {
+  state.currentDoctor = name;
+  saveCurrentDoctor();
+  state.shifts = storageGet(STORAGE_KEYS.shifts(name), []);
+  showView('clock');
+  renderClock();
+}
+
+function changeDoctor() {
+  showView('select');
+  renderDoctorSelect();
+}
+
+/* ==================================================
+   Excel input handling
+   ================================================== */
+async function handleExcelUpload(file) {
+  if (!file) return;
+  try {
+    document.getElementById('excel-filename').textContent = file.name;
+    document.getElementById('excel-hint').textContent = '別のファイルを選ぶ';
+    state.excelFile = file;
+
+    const meta = await loadExcelMeta(file);
+    state.excelMeta = meta;
+    const info = document.getElementById('excel-info');
+    if (meta.sheets.length === 0) {
+      info.innerHTML = '<span class="info-pill error">時間外シートが見つかりません</span>';
+      return;
+    }
+    info.innerHTML = meta.sheets.map(s =>
+      `<span class="info-pill success">${s.name} (${s.year}/${pad(s.month)})</span>`
+    ).join('');
+
+    // Try auto-fetch schedule for the first month
+    if (state.settings.scheduleBaseUrl && !state.scheduleData) {
+      const first = meta.sheets[0];
+      try {
+        await loadScheduleFromUrl(first.year, first.month);
+      } catch (e) {
+        console.warn('Auto-fetch failed:', e);
+      }
+    }
+    renderPreview();
+  } catch (e) {
+    console.error(e);
+    toast('エクセル読み込みに失敗: ' + e.message, 'error');
+  }
+}
+
+async function loadScheduleFromUrl(year, month) {
+  try {
+    setSchedulePill('取得中…', '');
+    const data = await fetchScheduleFromUrl(year, month);
+    state.scheduleData = data;
+    state.scheduleSource = 'url';
+    setSchedulePill(`${data.year}年${data.month}月 (URL)`, 'success');
+    renderPreview();
+  } catch (e) {
+    setSchedulePill('取得失敗', 'error');
+    toast(e.message, 'error');
+    throw e;
+  }
+}
+
+function setSchedulePill(text, kind) {
+  const p = document.getElementById('schedule-pill');
+  p.className = 'info-pill ' + (kind || '');
+  p.textContent = text;
+}
+
+async function handleScheduleFile(file) {
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (!data.days || !data.year || !data.month) throw new Error('JSON形式が不正です');
+    state.scheduleData = data;
+    state.scheduleSource = 'file';
+    setSchedulePill(`${data.year}年${data.month}月 (ファイル)`, 'success');
+    renderPreview();
+    toast('勤務表を読み込みました', 'success');
+  } catch (e) {
+    toast('読込失敗: ' + e.message, 'error');
+  }
+}
+
+function pasteScheduleModal() {
+  showModal(`
+    <h3>勤務表 JSON をペースト</h3>
+    <p class="ink-soft" style="font-size:12px;margin-bottom:10px;">
+      患者受け持ち表アプリの月次JSONをここに貼り付けてください。
+    </p>
+    <textarea id="paste-area" placeholder='{"year":2026,"month":5,"days":{...}}'></textarea>
+    <div class="modal-actions">
+      <button class="btn outline" data-modal-close>キャンセル</button>
+      <button class="btn" id="paste-load">読込</button>
+    </div>
+  `);
+  document.getElementById('paste-load').addEventListener('click', () => {
+    try {
+      const data = JSON.parse(document.getElementById('paste-area').value);
+      if (!data.days || !data.year || !data.month) throw new Error('JSON形式が不正です');
+      state.scheduleData = data;
+      state.scheduleSource = 'paste';
+      setSchedulePill(`${data.year}年${data.month}月 (ペースト)`, 'success');
+      closeModal();
+      renderPreview();
+      toast('勤務表を読み込みました', 'success');
+    } catch (e) {
+      toast('JSON解析失敗: ' + e.message, 'error');
+    }
+  });
+}
+
+/* ==================================================
+   Settings
+   ================================================== */
+function updateUrlExample() {
+  const base = (document.getElementById('schedule-base-url').value || state.settings.scheduleBaseUrl || '').trim();
+  const ex = base ? (base.endsWith('/') ? base : base + '/') + 'month_2026-05.json' : '(URL未入力)';
+  document.getElementById('url-example').textContent = ex;
+}
+
+function exportData() {
+  const all = {};
+  for (const d of DOCTORS) {
+    const k = STORAGE_KEYS.shifts(d);
+    const v = localStorage.getItem(k);
+    if (v) all[d] = JSON.parse(v);
+  }
+  const payload = {
+    exported_at: new Date().toISOString(),
+    settings: state.settings,
+    shifts_by_doctor: all,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `overtime_backup_${formatDateKey(new Date())}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast('エクスポートしました', 'success');
+}
+
+async function importData(file) {
+  try {
+    const text = await file.text();
+    const data = JSON.parse(text);
+    if (data.settings) {
+      state.settings = data.settings;
+      saveSettings();
+    }
+    if (data.shifts_by_doctor) {
+      for (const [doc, shifts] of Object.entries(data.shifts_by_doctor)) {
+        storageSet(STORAGE_KEYS.shifts(doc), shifts);
+      }
+      // reload current doctor
+      if (state.currentDoctor) {
+        state.shifts = storageGet(STORAGE_KEYS.shifts(state.currentDoctor), []);
+      }
+    }
+    toast('インポートしました', 'success');
+    renderClock();
+  } catch (e) {
+    toast('インポート失敗: ' + e.message, 'error');
+  }
+}
+
+function clearAllData() {
+  if (!confirm('全ての打刻履歴と設定を削除します。よろしいですか?')) return;
+  if (!confirm('本当に削除します。元に戻せません。')) return;
+  for (const d of DOCTORS) localStorage.removeItem(STORAGE_KEYS.shifts(d));
+  localStorage.removeItem(STORAGE_KEYS.settings);
+  localStorage.removeItem(STORAGE_KEYS.doctor);
+  state.currentDoctor = null;
+  state.shifts = [];
+  state.settings = { scheduleBaseUrl: '' };
+  toast('全データを削除しました', 'success');
+  changeDoctor();
+}
+
+/* ==================================================
+   Init
+   ================================================== */
+function bindEvents() {
+  // Clock toggle
+  document.getElementById('clock-toggle').addEventListener('click', () => {
+    if (getOpenShift()) clockOut(); else clockIn();
+  });
+
+  // Bottom nav
+  document.getElementById('bottom-nav').addEventListener('click', (e) => {
+    const v = e.target.closest('button')?.dataset.view;
+    if (v) showView(v);
+  });
+
+  // Action delegation
+  document.body.addEventListener('click', (e) => {
+    const a = e.target.closest('[data-action]')?.dataset.action;
+    if (!a) return;
+    switch (a) {
+      case 'change-doctor':   changeDoctor(); break;
+      case 'add-manual':      openShiftEditor(null, true); break;
+      case 'show-all-shifts': showAllShifts(); break;
+      case 'fetch-schedule':  promptFetchSchedule(); break;
+      case 'paste-schedule':  pasteScheduleModal(); break;
+      case 'save-settings':   handleSaveSettings(); break;
+      case 'export-data':     exportData(); break;
+      case 'import-data':     document.getElementById('import-file').click(); break;
+      case 'clear-data':      clearAllData(); break;
+    }
+  });
+
+  // Excel upload
+  document.getElementById('excel-input').addEventListener('change', (e) => {
+    handleExcelUpload(e.target.files[0]);
+  });
+
+  // Schedule file
+  document.getElementById('schedule-file').addEventListener('change', (e) => {
+    handleScheduleFile(e.target.files[0]);
+  });
+
+  // Settings url example update
+  document.getElementById('schedule-base-url').addEventListener('input', updateUrlExample);
+
+  // Generate button
+  document.getElementById('generate-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    btn.textContent = '生成中…';
+    try {
+      await generateExcel();
+    } catch (e) {
+      console.error(e);
+      toast('生成失敗: ' + e.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '生成してダウンロード';
+    }
+  });
+
+  // Import file
+  document.getElementById('import-file').addEventListener('change', (e) => {
+    if (e.target.files[0]) importData(e.target.files[0]);
+  });
+
+  // Modal backdrop click
+  document.getElementById('modal').addEventListener('click', (e) => {
+    if (e.target.id === 'modal') closeModal();
+  });
+}
+
+function promptFetchSchedule() {
+  if (!state.excelMeta || state.excelMeta.sheets.length === 0) {
+    toast('先にエクセルをアップロードしてください', 'error');
+    return;
+  }
+  if (!state.settings.scheduleBaseUrl) {
+    toast('設定でベースURLを入力してください', 'error');
+    showView('settings');
+    return;
+  }
+  // Use first sheet's year/month
+  const s = state.excelMeta.sheets[0];
+  loadScheduleFromUrl(s.year, s.month).catch(() => {});
+}
+
+function handleSaveSettings() {
+  state.settings.scheduleBaseUrl = document.getElementById('schedule-base-url').value.trim();
+  saveSettings();
+  updateUrlExample();
+  toast('保存しました', 'success');
+}
+
+function init() {
+  loadSettings();
+  loadDoctorState();
+  bindEvents();
+  renderDoctorSelect();
+
+  if (state.currentDoctor) {
+    showView('clock');
+  } else {
+    showView('select');
+  }
+
+  // Update clock display every second
+  setInterval(() => {
+    if (state.currentView === 'clock') {
+      const now = new Date();
+      document.getElementById('now-time').textContent = formatTime(now);
+    }
+  }, 1000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
