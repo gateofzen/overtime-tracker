@@ -451,6 +451,27 @@
   }
   .sheet-link:hover .arrow { transform: translateX(2px); color: var(--ink); }
 
+  .sheet-link-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .sheet-link-row .sheet-link {
+    margin: 0;
+    padding: 11px 12px;
+    font-size: 12px;
+    justify-content: center;
+    gap: 6px;
+  }
+  .sheet-link-row .sheet-link .arrow {
+    font-size: 11px;
+  }
+  @media (max-width: 380px) {
+    .sheet-link-row { grid-template-columns: 1fr; gap: 6px; }
+    .sheet-link-row .sheet-link { padding: 10px 12px; }
+  }
+
   /* ================================================== Auth view ================================================== */
   .auth-card { text-align: center; padding: 36px 24px; }
   .auth-card .glyph {
@@ -995,10 +1016,10 @@
 
       <div class="limit-warning" id="limit-warning" style="display:none;"></div>
 
-      <a class="sheet-link" id="sheet-link" href="#" target="_blank" rel="noopener" style="display:none;">
-        <span>📊 今月のスプレッドシートを開く</span>
-        <span class="arrow">→</span>
-      </a>
+      <div class="sheet-link-row" id="sheet-link-row" style="display:none;">
+        <a class="sheet-link" id="sheet-link-app" href="#"><span>📱 アプリで開く</span><span class="arrow">→</span></a>
+        <a class="sheet-link" id="sheet-link-browser" href="#" target="_blank" rel="noopener"><span>🌐 ブラウザで開く</span><span class="arrow">→</span></a>
+      </div>
     </div>
 
     <details class="section">
@@ -1948,13 +1969,35 @@ function hoursToHM(h) {
   return `${sign}${Math.floor(totalMin / 60)}:${String(totalMin % 60).padStart(2, '0')}`;
 }
 
+/* ================================================== Platform-aware spreadsheet URL builder ================================================== */
+function isAndroid() { return /Android/i.test(navigator.userAgent); }
+function isIOS()     { return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
+function isMobile()  { return isAndroid() || isIOS(); }
+
+function buildSheetUrls(sid) {
+  const browserUrl = `https://docs.google.com/spreadsheets/d/${sid}/edit`;
+  let appUrl = browserUrl;  // default for desktop (fallback to https)
+
+  if (isAndroid()) {
+    // Android intent URL with browser fallback
+    const fb = encodeURIComponent(browserUrl);
+    appUrl = `intent://docs.google.com/spreadsheets/d/${sid}/edit#Intent;scheme=https;package=com.google.android.apps.docs.editors.sheets;S.browser_fallback_url=${fb};end`;
+  } else if (isIOS()) {
+    // iOS Sheets app URL scheme
+    appUrl = `googlesheets://docs.google.com/spreadsheets/d/${sid}/edit`;
+  }
+  return { browserUrl, appUrl };
+}
+
 function renderStats(stats, year, month) {
   const monthEl   = document.getElementById('stat-month');
   const totalEl   = document.getElementById('stat-total');
   const remainEl  = document.getElementById('stat-remaining');
   const plannedEl = document.getElementById('stat-planned');
   const remainWrap = document.getElementById('stat-remaining-wrap');
-  const link = document.getElementById('sheet-link');
+  const linkRow = document.getElementById('sheet-link-row');
+  const linkApp = document.getElementById('sheet-link-app');
+  const linkBrowser = document.getElementById('sheet-link-browser');
   const warnEl = document.getElementById('limit-warning');
 
   monthEl.textContent = `${month}月`;
@@ -1965,7 +2008,7 @@ function renderStats(stats, year, month) {
     totalEl.textContent = '--:--';
     remainEl.textContent = '--:--';
     plannedEl.innerHTML = `予定 --h <span class="edit-icon">✎ タップして設定</span>`;
-    link.style.display = 'none';
+    linkRow.style.display = 'none';
     return;
   }
 
@@ -1995,8 +2038,18 @@ function renderStats(stats, year, month) {
     }
   }
 
-  link.href = `https://docs.google.com/spreadsheets/d/${state.currentMonthSid}/edit`;
-  link.style.display = '';
+  const urls = buildSheetUrls(state.currentMonthSid);
+  linkApp.href = urls.appUrl;
+  linkBrowser.href = urls.browserUrl;
+  // On desktop the "アプリで開く" button is meaningless — hide it
+  if (!isMobile()) {
+    linkApp.style.display = 'none';
+    linkRow.style.gridTemplateColumns = '1fr';
+  } else {
+    linkApp.style.display = '';
+    linkRow.style.gridTemplateColumns = '';
+  }
+  linkRow.style.display = '';
 }
 
 /* ================================================== Today's planned shift display ================================================== */
@@ -2261,7 +2314,8 @@ async function renderMonthly() {
       const isCurrent = key === currentKey;
       const row = document.createElement('a');
       row.className = 'month-row' + (isCurrent ? ' current' : '');
-      row.href = `https://docs.google.com/spreadsheets/d/${f.id}/edit`;
+      const urls = buildSheetUrls(f.id);
+      row.href = urls.appUrl;
       row.target = '_blank';
       row.rel = 'noopener';
       row.innerHTML = `
