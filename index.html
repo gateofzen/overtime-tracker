@@ -9,9 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  /* ==================================================
-     Design tokens — Japanese clinical minimal
-     ================================================== */
+  /* ================================================== Tokens ================================================== */
   :root {
     --paper: #f5f1ea;
     --paper-soft: #ede8df;
@@ -32,9 +30,7 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
-
   html { -webkit-text-size-adjust: 100%; }
-
   body {
     font-family: var(--sans);
     color: var(--ink);
@@ -48,8 +44,6 @@
     letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
   }
-
-  /* Subtle paper grain */
   body::before {
     content: '';
     position: fixed;
@@ -63,20 +57,13 @@
   .container {
     max-width: 580px;
     margin: 0 auto;
-    padding: 28px 20px 120px;
+    padding: 28px 20px 110px;
     position: relative;
     z-index: 1;
   }
 
-  /* ==================================================
-     Typography
-     ================================================== */
-  h1, h2, h3 {
-    font-family: var(--serif);
-    font-weight: 500;
-    color: var(--ink);
-    letter-spacing: 0.02em;
-  }
+  /* ================================================== Type ================================================== */
+  h1, h2, h3 { font-family: var(--serif); font-weight: 500; color: var(--ink); letter-spacing: 0.02em; }
 
   .app-title {
     font-size: 24px;
@@ -86,12 +73,9 @@
     gap: 12px;
     padding-bottom: 14px;
     border-bottom: 1px solid var(--line);
-    margin-bottom: 28px;
+    margin-bottom: 22px;
   }
-  .app-title .glyph {
-    font-size: 28px;
-    color: var(--terracotta);
-  }
+  .app-title .glyph { font-size: 28px; color: var(--terracotta); }
   .app-title .meta {
     margin-left: auto;
     font-family: var(--sans);
@@ -116,22 +100,12 @@
     background: var(--terracotta);
   }
 
-  .label {
-    font-family: var(--sans);
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: var(--ink-mute);
-    margin-bottom: 8px;
-  }
-
+  .label { font-family: var(--sans); font-size: 11px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--ink-mute); margin-bottom: 8px; }
   .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .ink-soft { color: var(--ink-soft); }
   .ink-mute { color: var(--ink-mute); }
 
-  /* ==================================================
-     Card
-     ================================================== */
+  /* ================================================== Cards ================================================== */
   .card {
     background: var(--paper-card);
     border: 1px solid var(--line);
@@ -141,9 +115,7 @@
   }
   .card.tight { padding: 16px 18px; }
 
-  /* ==================================================
-     Doctor selection
-     ================================================== */
+  /* ================================================== Doctor selector ================================================== */
   .doctor-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -166,18 +138,14 @@
     border-color: var(--ink-soft);
     outline: none;
   }
-  .doctor-btn:active {
-    transform: scale(0.98);
-  }
+  .doctor-btn:active { transform: scale(0.98); }
   .doctor-btn.selected {
     background: var(--ink);
     color: var(--paper);
     border-color: var(--ink);
   }
 
-  /* ==================================================
-     Doctor banner
-     ================================================== */
+  /* ================================================== Banner ================================================== */
   .doctor-banner {
     display: flex;
     align-items: center;
@@ -185,7 +153,9 @@
     padding: 12px 18px;
     background: var(--ink);
     color: var(--paper);
-    margin-bottom: 22px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
   .doctor-banner .name {
     font-family: var(--serif);
@@ -201,6 +171,11 @@
     margin-right: 4px;
     vertical-align: middle;
   }
+  .doctor-banner .right {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
   .change-btn {
     background: transparent;
     color: var(--paper);
@@ -214,9 +189,20 @@
   }
   .change-btn:hover { background: rgba(255,255,255,0.08); }
 
-  /* ==================================================
-     Clock display
-     ================================================== */
+  .sync-pill {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+    border: 1px solid;
+    border-radius: 0;
+    font-family: var(--sans);
+  }
+  .sync-pill.ok      { color: var(--moss-soft); border-color: var(--moss-soft); }
+  .sync-pill.busy    { color: var(--gold); border-color: var(--gold); }
+  .sync-pill.warn    { color: var(--terracotta-soft); border-color: var(--terracotta-soft); }
+  .sync-pill.offline { color: var(--ink-mute); border-color: var(--ink-mute); }
+
+  /* ================================================== Clock display ================================================== */
   .clock-display {
     text-align: center;
     padding: 18px 16px 22px;
@@ -262,9 +248,7 @@
   .status-text { color: var(--ink-soft); }
   .status-text strong { color: var(--ink); font-weight: 500; }
 
-  /* ==================================================
-     Big action button
-     ================================================== */
+  /* ================================================== Big button ================================================== */
   .big-btn {
     width: 100%;
     margin-top: 18px;
@@ -280,25 +264,113 @@
     transition: all 0.15s ease;
     text-indent: 0.3em;
   }
-  .big-btn.clock-out {
-    background: var(--terracotta);
-  }
-  .big-btn:hover {
-    transform: translateY(-1px);
-  }
-  .big-btn:active {
-    transform: translateY(0);
-    filter: brightness(0.92);
-  }
+  .big-btn.clock-out { background: var(--terracotta); }
+  .big-btn:hover { transform: translateY(-1px); }
+  .big-btn:active { transform: translateY(0); filter: brightness(0.92); }
   .big-btn:disabled {
     background: var(--ink-mute);
     cursor: not-allowed;
     transform: none;
   }
 
-  /* ==================================================
-     History
-     ================================================== */
+  /* ================================================== Stats panel ================================================== */
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-top: 18px;
+  }
+  .stat {
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    padding: 14px 16px;
+  }
+  .stat .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .stat .stat-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .stat .stat-sub {
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin-top: 3px;
+  }
+  .stat.warn .stat-value { color: var(--terracotta); }
+
+  .sheet-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    margin-top: 12px;
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    color: var(--ink);
+    text-decoration: none;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+  .sheet-link:hover {
+    background: var(--paper-soft);
+    border-color: var(--ink-soft);
+  }
+  .sheet-link .arrow {
+    color: var(--ink-mute);
+    transition: transform 0.15s;
+  }
+  .sheet-link:hover .arrow { transform: translateX(2px); color: var(--ink); }
+
+  /* ================================================== Auth view ================================================== */
+  .auth-card { text-align: center; padding: 36px 24px; }
+  .auth-card .glyph {
+    font-family: var(--serif);
+    font-size: 42px;
+    color: var(--terracotta);
+    margin-bottom: 14px;
+  }
+  .auth-card h2 {
+    font-size: 19px;
+    margin-bottom: 10px;
+  }
+  .auth-card p {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 22px;
+    line-height: 1.7;
+  }
+  .auth-btn {
+    background: white;
+    color: #3c4043;
+    border: 1px solid #dadce0;
+    padding: 12px 24px;
+    font-family: 'Roboto', var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.15s;
+    letter-spacing: 0;
+  }
+  .auth-btn:hover {
+    box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15);
+    background: #f8f9fa;
+  }
+  .auth-btn .g-icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* ================================================== Sections / details ================================================== */
   details.section {
     margin-top: 18px;
     border: 1px solid var(--line);
@@ -325,16 +397,11 @@
     color: var(--ink-mute);
     transition: transform 0.2s ease;
   }
-  details.section[open] summary::after {
-    transform: rotate(45deg);
-  }
-  details.section .body {
-    padding: 0 18px 18px;
-  }
+  details.section[open] summary::after { transform: rotate(45deg); }
+  details.section .body { padding: 0 18px 18px; }
 
-  .shift-list {
-    border-top: 1px solid var(--line-soft);
-  }
+  /* ================================================== Shift list ================================================== */
+  .shift-list { border-top: 1px solid var(--line-soft); }
   .shift-row {
     display: grid;
     grid-template-columns: 64px 1fr 1fr auto;
@@ -356,10 +423,7 @@
     color: var(--ink-mute);
     letter-spacing: 0.1em;
   }
-  .shift-row .time {
-    font-family: var(--mono);
-    font-size: 14px;
-  }
+  .shift-row .time { font-family: var(--mono); font-size: 14px; }
   .shift-row .time .label-tiny {
     display: block;
     font-family: var(--sans);
@@ -368,10 +432,12 @@
     color: var(--ink-mute);
     margin-bottom: 2px;
   }
-  .shift-row .actions {
-    display: flex;
-    gap: 4px;
+  .shift-row .actions { display: flex; gap: 4px; }
+  .shift-row .sync-icon {
+    font-size: 10px;
+    color: var(--moss-soft);
   }
+  .shift-row.unsynced .sync-icon { color: var(--gold); }
   .icon-btn {
     background: transparent;
     border: 1px solid var(--line);
@@ -382,8 +448,11 @@
     cursor: pointer;
   }
   .icon-btn:hover { background: var(--paper-soft); }
-  .icon-btn.danger:hover { background: var(--terracotta); color: var(--paper); border-color: var(--terracotta); }
-
+  .icon-btn.danger:hover {
+    background: var(--terracotta);
+    color: var(--paper);
+    border-color: var(--terracotta);
+  }
   .empty-state {
     text-align: center;
     padding: 24px 10px;
@@ -391,12 +460,55 @@
     font-size: 13px;
   }
 
-  /* ==================================================
-     Forms
-     ================================================== */
-  .field {
-    margin-bottom: 14px;
+  /* ================================================== Monthly history ================================================== */
+  .month-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    margin-bottom: 8px;
+    transition: all 0.15s;
+    text-decoration: none;
+    color: inherit;
   }
+  .month-row:hover {
+    border-color: var(--ink-soft);
+    background: var(--paper-soft);
+  }
+  .month-row .month-label {
+    font-family: var(--serif);
+    font-size: 17px;
+  }
+  .month-row .month-label small {
+    display: block;
+    font-family: var(--sans);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+  .month-row .month-total {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 500;
+  }
+  .month-row.current .month-label::before {
+    content: '今月';
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    background: var(--terracotta);
+    color: var(--paper);
+    padding: 2px 6px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+
+  /* ================================================== Forms ================================================== */
+  .field { margin-bottom: 14px; }
   .field label {
     display: block;
     font-size: 11px;
@@ -420,11 +532,6 @@
     border-color: var(--ink-soft);
   }
   textarea { font-family: var(--mono); font-size: 12px; min-height: 90px; resize: vertical; }
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-  }
 
   .btn {
     padding: 10px 18px;
@@ -445,113 +552,10 @@
     color: var(--ink);
   }
   .btn.outline:hover { background: var(--paper-soft); }
-  .btn.accent {
-    background: var(--terracotta);
-    border-color: var(--terracotta);
-  }
-  .btn.accent:hover { background: var(--terracotta-soft); border-color: var(--terracotta-soft); }
-  .btn-row {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
+  .btn.danger { background: var(--terracotta); border-color: var(--terracotta); }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
-  /* ==================================================
-     Excel processing
-     ================================================== */
-  .excel-step {
-    margin-bottom: 20px;
-    padding-bottom: 18px;
-    border-bottom: 1px dashed var(--line);
-  }
-  .excel-step:last-child { border: none; padding-bottom: 0; }
-  .excel-step .step-num {
-    font-family: var(--serif);
-    font-size: 13px;
-    color: var(--terracotta);
-    letter-spacing: 0.2em;
-    margin-bottom: 4px;
-  }
-  .excel-step .step-title {
-    font-family: var(--serif);
-    font-size: 16px;
-    margin-bottom: 12px;
-  }
-  .file-input-wrap {
-    border: 1px dashed var(--line);
-    padding: 14px;
-    background: var(--paper);
-    text-align: center;
-    cursor: pointer;
-    position: relative;
-    transition: border 0.15s;
-  }
-  .file-input-wrap:hover {
-    border-color: var(--ink-soft);
-  }
-  .file-input-wrap input[type="file"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-  }
-  .file-input-wrap .hint {
-    font-size: 12px;
-    color: var(--ink-mute);
-  }
-  .file-input-wrap .filename {
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--ink);
-    margin-top: 4px;
-  }
-
-  .info-pill {
-    display: inline-block;
-    padding: 4px 10px;
-    background: var(--paper-soft);
-    border: 1px solid var(--line);
-    font-size: 11px;
-    font-family: var(--sans);
-    color: var(--ink-soft);
-    letter-spacing: 0.05em;
-    margin-right: 6px;
-  }
-  .info-pill.success { border-color: var(--moss); color: var(--moss); }
-  .info-pill.error { border-color: var(--terracotta); color: var(--terracotta); }
-
-  .preview-table {
-    width: 100%;
-    margin-top: 12px;
-    border-collapse: collapse;
-    font-size: 12px;
-    font-family: var(--mono);
-  }
-  .preview-table th, .preview-table td {
-    padding: 6px 8px;
-    border: 1px solid var(--line-soft);
-    text-align: left;
-  }
-  .preview-table th {
-    background: var(--paper-soft);
-    font-family: var(--sans);
-    font-size: 10px;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--ink-soft);
-    font-weight: 500;
-  }
-  .preview-table td.shift { font-family: var(--sans); font-size: 12px; }
-  .preview-table tr.weekend td:first-child { color: var(--terracotta); }
-  .preview-wrap {
-    max-height: 360px;
-    overflow-y: auto;
-    border: 1px solid var(--line);
-  }
-
-  /* ==================================================
-     Bottom nav
-     ================================================== */
+  /* ================================================== Bottom nav ================================================== */
   .bottom-nav {
     position: fixed;
     bottom: 0;
@@ -587,9 +591,7 @@
     border-top-color: var(--terracotta);
   }
 
-  /* ==================================================
-     Toast / Modal
-     ================================================== */
+  /* ================================================== Toast / Modal ================================================== */
   .toast {
     position: fixed;
     bottom: 88px;
@@ -646,17 +648,133 @@
     justify-content: flex-end;
   }
 
-  /* ==================================================
-     Section toggling
-     ================================================== */
+  /* ================================================== View toggle ================================================== */
   .view { display: none; }
   .view.active { display: block; }
 
-  /* ==================================================
-     Responsive tweaks
-     ================================================== */
+  /* ================================================== Loading spinner ================================================== */
+  .spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--line);
+    border-top-color: var(--ink);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: -2px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ================================================== Auto-action splash ================================================== */
+  .auto-splash {
+    position: fixed;
+    inset: 0;
+    background: var(--paper);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+    text-align: center;
+    padding: 40px 20px;
+  }
+  .auto-splash .glyph-big {
+    font-family: var(--serif);
+    font-size: 72px;
+    line-height: 1;
+    margin-bottom: 24px;
+    transition: all 0.3s ease;
+  }
+  .auto-splash.in .glyph-big { color: var(--moss); }
+  .auto-splash.out .glyph-big { color: var(--terracotta); }
+  .auto-splash.error .glyph-big { color: var(--terracotta); font-size: 48px; }
+  .auto-splash .auto-status {
+    font-family: var(--serif);
+    font-size: 28px;
+    margin-bottom: 14px;
+    letter-spacing: 0.15em;
+  }
+  .auto-splash .auto-time {
+    font-family: var(--mono);
+    font-size: 36px;
+    margin-bottom: 24px;
+  }
+  .auto-splash .auto-doctor {
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+    margin-bottom: 32px;
+  }
+  .auto-splash .auto-sub {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-bottom: 28px;
+    max-width: 320px;
+    line-height: 1.7;
+  }
+  .auto-splash .auto-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  /* ================================================== Geo-prompt modal ================================================== */
+  .geo-modal-card {
+    text-align: center;
+    padding: 8px 0;
+  }
+  .geo-modal-card .glyph {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+  .geo-modal-card.in .glyph { color: var(--moss); }
+  .geo-modal-card.out .glyph { color: var(--terracotta); }
+  .geo-modal-card .geo-msg {
+    font-family: var(--serif);
+    font-size: 17px;
+    margin-bottom: 8px;
+  }
+  .geo-modal-card .geo-sub {
+    font-size: 12px;
+    color: var(--ink-mute);
+    margin-bottom: 18px;
+  }
+  .geo-modal-card .modal-actions {
+    justify-content: center;
+  }
+
+  /* ================================================== Settings: shortcut helper ================================================== */
+  .shortcut-url {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    align-items: stretch;
+  }
+  .shortcut-url input {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+  .shortcut-url button {
+    flex-shrink: 0;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+  .geo-status {
+    font-size: 12px;
+    color: var(--ink-mute);
+    padding: 8px 12px;
+    background: var(--paper);
+    border: 1px dashed var(--line);
+    margin-bottom: 12px;
+  }
+  .geo-status .mono { font-size: 12px; }
+
+  /* ================================================== Responsive ================================================== */
   @media (min-width: 600px) {
-    .doctor-grid { grid-template-columns: repeat(3, 1fr); }
     .now-time { font-size: 64px; }
   }
   @media (max-width: 380px) {
@@ -664,17 +782,17 @@
     .now-time { font-size: 44px; }
     .big-btn { font-size: 22px; padding: 22px; }
     .doctor-btn { font-size: 19px; padding: 18px 4px; }
+    .doctor-banner { font-size: 14px; }
   }
 </style>
 </head>
 <body>
 
 <div class="container">
-  <!-- ===== Header ===== -->
   <header class="app-title">
     <span class="glyph">時</span>
     <span>時間外勤務管理</span>
-    <span class="meta">v1.0</span>
+    <span class="meta">v2.0</span>
   </header>
 
   <!-- ===== View: Doctor selection ===== -->
@@ -686,11 +804,44 @@
     </div>
   </div>
 
-  <!-- ===== View: Clock in/out ===== -->
+  <!-- ===== View: Auth (Google sign-in) ===== -->
+  <div class="view" id="view-auth">
+    <div class="doctor-banner">
+      <span class="name" id="doctor-name-auth"></span>
+      <div class="right">
+        <button class="change-btn" data-action="change-doctor">医師変更</button>
+      </div>
+    </div>
+    <div class="card auth-card">
+      <div class="glyph">時</div>
+      <h2>Google ドライブと連携</h2>
+      <p>
+        ご自身の Google Drive に「<strong>時間外勤務</strong>」フォルダを作成し、月別のスプレッドシートに勤務時間を自動で記録します。<br>
+        <span class="ink-mute" style="font-size:11px;">※ このアプリが作成したファイルにのみアクセスします</span>
+      </p>
+      <button class="auth-btn" data-action="signin">
+        <svg class="g-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+          <path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/>
+          <path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/>
+          <path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/>
+          <path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
+        </svg>
+        Google でサインイン
+      </button>
+      <p style="margin-top:18px;font-size:11px;color:var(--ink-mute);">
+        Client ID が設定されていない場合は、まず「設定」タブで入力してください。
+      </p>
+    </div>
+  </div>
+
+  <!-- ===== View: Clock ===== -->
   <div class="view" id="view-clock">
     <div class="doctor-banner">
       <span class="name" id="doctor-name-clock"></span>
-      <button class="change-btn" data-action="change-doctor">医師変更</button>
+      <div class="right">
+        <span class="sync-pill" id="sync-pill">—</span>
+        <button class="change-btn" data-action="change-doctor">医師変更</button>
+      </div>
     </div>
 
     <div class="card">
@@ -703,6 +854,24 @@
         </div>
       </div>
       <button class="big-btn" id="clock-toggle">出　勤</button>
+
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">今月の合計</div>
+          <div class="stat-value" id="stat-total">--:--</div>
+          <div class="stat-sub" id="stat-month">--月</div>
+        </div>
+        <div class="stat" id="stat-remaining-wrap">
+          <div class="stat-label">80時間まで残り</div>
+          <div class="stat-value" id="stat-remaining">--:--</div>
+          <div class="stat-sub" id="stat-planned">予定 --h</div>
+        </div>
+      </div>
+
+      <a class="sheet-link" id="sheet-link" href="#" target="_blank" rel="noopener" style="display:none;">
+        <span>📊 今月のスプレッドシートを開く</span>
+        <span class="arrow">→</span>
+      </a>
     </div>
 
     <details class="section">
@@ -711,58 +880,26 @@
         <div id="shifts-list"></div>
         <div class="btn-row" style="margin-top:14px;">
           <button class="btn outline" data-action="add-manual">手動で追加</button>
-          <button class="btn outline" data-action="show-all-shifts">全件表示</button>
+          <button class="btn outline" data-action="resync-all">未同期を再送信</button>
         </div>
       </div>
     </details>
   </div>
 
-  <!-- ===== View: Excel processing ===== -->
-  <div class="view" id="view-excel">
+  <!-- ===== View: Monthly history ===== -->
+  <div class="view" id="view-monthly">
     <div class="doctor-banner">
-      <span class="name" id="doctor-name-excel"></span>
-      <button class="change-btn" data-action="change-doctor">医師変更</button>
+      <span class="name" id="doctor-name-monthly"></span>
+      <div class="right">
+        <button class="change-btn" data-action="refresh-monthly">更新</button>
+        <button class="change-btn" data-action="change-doctor">医師変更</button>
+      </div>
     </div>
-
     <div class="card">
-      <h2 class="section-title">エクセル自動入力</h2>
-
-      <div class="excel-step">
-        <div class="step-num">STEP 01</div>
-        <div class="step-title">時間外管理.xlsx をアップロード</div>
-        <label class="file-input-wrap">
-          <input type="file" id="excel-input" accept=".xlsx,.xlsm">
-          <div class="hint" id="excel-hint">タップしてファイルを選択</div>
-          <div class="filename" id="excel-filename"></div>
-        </label>
-        <div id="excel-info" style="margin-top:8px;"></div>
+      <h2 class="section-title">月次一覧</h2>
+      <div id="monthly-list">
+        <p class="empty-state">読み込み中…</p>
       </div>
-
-      <div class="excel-step">
-        <div class="step-num">STEP 02</div>
-        <div class="step-title">勤務表データを取得</div>
-        <div id="schedule-info">
-          <span class="info-pill" id="schedule-pill">未取得</span>
-        </div>
-        <div class="btn-row" style="margin-top:10px;">
-          <button class="btn outline" data-action="fetch-schedule">URL から取得</button>
-          <label class="btn outline" style="display:inline-block;cursor:pointer;">
-            JSON アップロード
-            <input type="file" id="schedule-file" accept=".json,application/json" hidden>
-          </label>
-          <button class="btn outline" data-action="paste-schedule">JSON ペースト</button>
-        </div>
-      </div>
-
-      <div class="excel-step">
-        <div class="step-num">STEP 03</div>
-        <div class="step-title">プレビュー</div>
-        <div id="preview-area">
-          <p class="empty-state">上記2つを準備するとプレビューが表示されます</p>
-        </div>
-      </div>
-
-      <button class="btn accent" id="generate-btn" disabled style="width:100%;padding:16px;font-size:14px;letter-spacing:0.2em;">生成してダウンロード</button>
     </div>
   </div>
 
@@ -770,66 +907,148 @@
   <div class="view" id="view-settings">
     <div class="doctor-banner" id="settings-banner" style="display:none;">
       <span class="name" id="doctor-name-settings"></span>
-      <button class="change-btn" data-action="change-doctor">医師変更</button>
+      <div class="right">
+        <button class="change-btn" data-action="change-doctor">医師変更</button>
+      </div>
     </div>
 
     <div class="card">
-      <h2 class="section-title">設定</h2>
-
+      <h2 class="section-title">Google 連携</h2>
       <div class="field">
-        <label>勤務表データの取得URL (ベース)</label>
-        <input type="url" id="schedule-base-url" placeholder="https://raw.githubusercontent.com/USER/REPO/main/">
+        <label>OAuth Client ID</label>
+        <input type="text" id="client-id-input" placeholder="xxxxxxxxxxx.apps.googleusercontent.com">
         <p class="ink-mute" style="font-size:11px;margin-top:6px;">
-          このベースURLに <code class="mono">month_YYYY-MM.json</code> を付けて取得します。<br>
-          例: 2026年5月 → <span class="mono" id="url-example">…/month_2026-05.json</span>
+          Google Cloud Console で作成した Web application 用の Client ID を入力してください。
         </p>
       </div>
-
       <div class="btn-row">
-        <button class="btn" data-action="save-settings">保存</button>
+        <button class="btn" data-action="save-client-id">保存</button>
+        <button class="btn outline" data-action="signout" id="signout-btn" style="display:none;">サインアウト</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">勤務表データ</h2>
+      <div class="field">
+        <label>取得URL (ベース)</label>
+        <input type="url" id="schedule-base-url" placeholder="https://raw.githubusercontent.com/gateofzen/schedule-storage/main/">
+        <p class="ink-mute" style="font-size:11px;margin-top:6px;">
+          このベースURLに <span class="mono">month_YYYY-MM.json</span> を付けて取得します。<br>
+          例: <span class="mono" id="url-example">…</span>
+        </p>
+      </div>
+      <div class="btn-row">
+        <button class="btn" data-action="save-schedule-url">保存</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">位置情報による自動提案</h2>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        アプリ起動時に病院付近にいる場合、自動的に出勤/退勤を提案します。
+      </p>
+      <div class="field">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+          <input type="checkbox" id="geo-enabled" style="width:auto;">
+          <span style="font-size:14px;color:var(--ink);text-transform:none;letter-spacing:0;">位置情報による自動提案を有効にする</span>
+        </label>
+      </div>
+      <div id="geo-config-panel">
+        <div class="geo-status" id="geo-status">病院位置: 未登録</div>
+        <div class="field">
+          <label>近接判定の半径 (m)</label>
+          <input type="text" id="geo-radius" value="150" inputmode="numeric">
+        </div>
+        <div class="btn-row">
+          <button class="btn outline" data-action="register-hospital-loc">現在地を病院として登録</button>
+          <button class="btn outline" data-action="clear-hospital-loc">登録解除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">ショートカット URL</h2>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        以下のURLを iOS ショートカット / Android オートメーション の「URLを開く」アクションに設定すると、ボタンを押さずに打刻できます。
+      </p>
+      <div class="field">
+        <label>① 自動トグル (推奨)</label>
+        <div class="shortcut-url">
+          <input type="text" id="shortcut-toggle" readonly>
+          <button class="btn outline" data-action="copy-url" data-url-id="shortcut-toggle">コピー</button>
+        </div>
+        <p class="ink-mute" style="font-size:11px;">出勤中なら退勤、勤務外なら出勤を自動判定。1つのショートカットで完結。</p>
+      </div>
+      <div class="field">
+        <label>② 出勤専用</label>
+        <div class="shortcut-url">
+          <input type="text" id="shortcut-in" readonly>
+          <button class="btn outline" data-action="copy-url" data-url-id="shortcut-in">コピー</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>③ 退勤専用</label>
+        <div class="shortcut-url">
+          <input type="text" id="shortcut-out" readonly>
+          <button class="btn outline" data-action="copy-url" data-url-id="shortcut-out">コピー</button>
+        </div>
+      </div>
+      <details style="margin-top:8px;">
+        <summary style="cursor:pointer;font-size:13px;color:var(--ink-soft);">設定方法 (iOS / Android)</summary>
+        <div style="font-size:12px;color:var(--ink-soft);line-height:1.8;padding:10px 0 0;">
+          <strong>iOS (ショートカット.app):</strong><br>
+          ① ショートカットを新規作成 → 「URLを開く」アクション → 上記URLを貼り付け<br>
+          ② オートメーション → 個人用 → 到着時 → 場所:病院 → 上記ショートカットを実行<br>
+          (退勤用は「出発時」のオートメーションで設定)<br><br>
+          <strong>Android:</strong><br>
+          MacroDroid / Tasker / Automate などで「位置情報トリガー」 → 「URLを開く」<br>
+          または Google アシスタントの「ルーティン」機能から設定可能。
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">ルール</h2>
+      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+        <thead>
+          <tr style="background:var(--paper-soft);">
+            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">項目</th>
+            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">日勤</th>
+            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">夜勤・25勤</th>
+            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:6px;border:1px solid var(--line-soft);">勤務開始前</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">出勤〜8:30 (max 30分)</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">出勤〜16:30 (max 30分)</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">—</td>
+          </tr>
+          <tr>
+            <td style="padding:6px;border:1px solid var(--line-soft);">時間外開始</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">17:30</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">—</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">9:30</td>
+          </tr>
+          <tr>
+            <td style="padding:6px;border:1px solid var(--line-soft);">時間外終了</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">退勤時刻</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">—</td>
+            <td style="padding:6px;border:1px solid var(--line-soft);">退勤時刻 (前夜の)</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
     <div class="card">
       <h2 class="section-title">データ管理</h2>
-      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
-        この端末に保存されているデータを操作できます。
-      </p>
       <div class="btn-row">
-        <button class="btn outline" data-action="export-data">エクスポート (バックアップ)</button>
+        <button class="btn outline" data-action="export-data">エクスポート</button>
         <button class="btn outline" data-action="import-data">インポート</button>
         <button class="btn outline" data-action="clear-data" style="color:var(--terracotta);border-color:var(--terracotta);">全消去</button>
       </div>
       <input type="file" id="import-file" accept=".json" hidden>
-    </div>
-
-    <div class="card">
-      <h2 class="section-title">ルール定義</h2>
-      <table class="preview-table" style="font-size:11px;">
-        <thead>
-          <tr><th>項目</th><th>日勤</th><th>夜勤・25勤</th><th>明</th></tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>勤務開始前</td>
-            <td>出勤〜8:30 (最大30分)</td>
-            <td>出勤〜16:30 (最大30分)</td>
-            <td>—</td>
-          </tr>
-          <tr>
-            <td>時間外開始</td>
-            <td>17:30</td>
-            <td>—</td>
-            <td>9:30</td>
-          </tr>
-          <tr>
-            <td>時間外終了</td>
-            <td>退勤時刻</td>
-            <td>—</td>
-            <td>退勤時刻 (前夜の)</td>
-          </tr>
-        </tbody>
-      </table>
     </div>
   </div>
 </div>
@@ -837,451 +1056,758 @@
 <!-- ===== Bottom nav ===== -->
 <nav class="bottom-nav" id="bottom-nav" style="display:none;">
   <button data-view="clock"><span class="nav-icon">⏱</span>打　刻</button>
-  <button data-view="excel"><span class="nav-icon">📋</span>集　計</button>
+  <button data-view="monthly"><span class="nav-icon">📊</span>月　次</button>
   <button data-view="settings"><span class="nav-icon">⚙</span>設　定</button>
 </nav>
 
-<!-- ===== Toast ===== -->
 <div class="toast" id="toast"></div>
+<div class="modal-backdrop" id="modal"><div class="modal" id="modal-content"></div></div>
 
-<!-- ===== Modal ===== -->
-<div class="modal-backdrop" id="modal">
-  <div class="modal" id="modal-content"></div>
-</div>
+<!-- Auto-action splash (URL parameter triggered) -->
+<div class="auto-splash" id="auto-splash" style="display:none;"></div>
 
-<!-- ===== Libs ===== -->
-<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
 'use strict';
 
-/* ==================================================
-   Constants
-   ================================================== */
+/* ================================================== Constants ================================================== */
 const DOCTORS = ['前川', '提嶋', '遠藤', '小舘', '森木', '中嶋', '上島', '原', '富田'];
+const DEFAULT_SCHEDULE_URL = 'https://raw.githubusercontent.com/gateofzen/schedule-storage/main/';
+const DEFAULT_CLIENT_ID = ''; // Edit this line to embed a default Client ID
+
+const FOLDER_NAME = '時間外勤務';
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const STORAGE_KEYS = {
   doctor:   'overtime_current_doctor',
   settings: 'overtime_settings',
   shifts:   (doc) => `overtime_shifts_${doc}`,
+  cache:    (doc) => `overtime_cache_${doc}`, // {folderId, sheets: {YYYY-MM: spreadsheetId}}
 };
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
-
-/* Time helpers ----------------------------------- */
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
-/* Schedule keys → shift type */
-const SCHEDULE_KEYS = [
-  ['day', '日勤'],
-  ['night', '夜勤'],
-  ['ake', '明'],
-  ['off', '休'],
-  ['trip', '出張'],
-];
-
-/* ==================================================
-   State
-   ================================================== */
+/* ================================================== State ================================================== */
 const state = {
   currentDoctor: null,
   currentView: 'select',
-  shifts: [],          // [{id, clockIn:ISO, clockOut:ISO|null}, ...]
-  settings: { scheduleBaseUrl: '' },
-  excelFile: null,
-  excelMeta: null,     // {sheets: [{name, year, month}, ...]}
-  scheduleData: null,  // {year, month, days:{...}}
-  scheduleSource: null,// 'url' | 'file' | 'paste'
+  shifts: [],          // [{id, clockIn, clockOut, syncedSheetIds:[]}]
+  settings: { scheduleBaseUrl: DEFAULT_SCHEDULE_URL, clientId: DEFAULT_CLIENT_ID },
+  cache: { folderId: null, sheets: {} }, // sheets: {"2026-05": "spreadsheetId"}
+  scheduleCache: {},   // {"2026-05": {data}}
+  auth: {
+    tokenClient: null,
+    accessToken: null,
+    expiresAt: 0,
+    pendingResolve: null,
+    pendingReject: null,
+  },
+  syncStatus: 'unknown', // 'ok' | 'busy' | 'warn' | 'offline' | 'unknown'
+  monthlyTotals: {},   // {"2026-05": "8:25"}
 };
 
-/* ==================================================
-   Storage
-   ================================================== */
+/* ================================================== Storage ================================================== */
 function storageGet(key, fallback = null) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch { return fallback; }
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; } catch { return fallback; }
 }
-function storageSet(key, val) {
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.error(e); }
-}
+function storageSet(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.error(e); } }
 
 function loadSettings() {
-  state.settings = storageGet(STORAGE_KEYS.settings, { scheduleBaseUrl: '' });
+  const s = storageGet(STORAGE_KEYS.settings, null);
+  state.settings = {
+    scheduleBaseUrl: (s?.scheduleBaseUrl) || DEFAULT_SCHEDULE_URL,
+    clientId:        (s?.clientId)        || DEFAULT_CLIENT_ID,
+    geoEnabled:      !!(s?.geoEnabled),
+    hospitalLat:     (s?.hospitalLat)     || null,
+    hospitalLng:     (s?.hospitalLng)     || null,
+    geoRadius:       (s?.geoRadius)       || 150,
+  };
 }
-function saveSettings() {
-  storageSet(STORAGE_KEYS.settings, state.settings);
-}
+function saveSettings() { storageSet(STORAGE_KEYS.settings, state.settings); }
 
 function loadDoctorState() {
   state.currentDoctor = storageGet(STORAGE_KEYS.doctor);
   if (state.currentDoctor) {
     state.shifts = storageGet(STORAGE_KEYS.shifts(state.currentDoctor), []);
+    state.cache = storageGet(STORAGE_KEYS.cache(state.currentDoctor), { folderId: null, sheets: {} });
   }
 }
-function saveCurrentDoctor() {
-  storageSet(STORAGE_KEYS.doctor, state.currentDoctor);
-}
-function saveShifts() {
-  if (!state.currentDoctor) return;
-  storageSet(STORAGE_KEYS.shifts(state.currentDoctor), state.shifts);
+function saveCurrentDoctor() { storageSet(STORAGE_KEYS.doctor, state.currentDoctor); }
+function saveShifts() { if (state.currentDoctor) storageSet(STORAGE_KEYS.shifts(state.currentDoctor), state.shifts); }
+function saveCache() { if (state.currentDoctor) storageSet(STORAGE_KEYS.cache(state.currentDoctor), state.cache); }
+
+/* ================================================== Time helpers ================================================== */
+const pad = (n) => String(n).padStart(2, '0');
+const ymKey = (y, m) => `${y}-${pad(m)}`;
+function formatDateKey(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function formatDateDisplay(d) { return `${pad(d.getMonth()+1)}/${pad(d.getDate())}`; }
+function formatWeekday(d) { return WEEKDAY_JP[d.getDay()]; }
+function formatTime(d) { return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function formatDateTimeFull(d) { return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${formatWeekday(d)} ${formatTime(d)}`; }
+function timeOfDayString(d) { return `${d.getHours()}:${pad(d.getMinutes())}`; } // for USER_ENTERED parsing
+function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function dayOfMonth(d) { return d.getDate(); }
+
+/* ================================================== Google Auth (GIS) ================================================== */
+function setSyncStatus(status, label = '') {
+  state.syncStatus = status;
+  const pill = document.getElementById('sync-pill');
+  if (!pill) return;
+  pill.className = 'sync-pill ' + status;
+  const labels = {
+    ok: '✓ 同期済',
+    busy: '同期中…',
+    warn: '⚠ 同期失敗',
+    offline: '未連携',
+    unknown: '—'
+  };
+  pill.textContent = label || labels[status] || '—';
 }
 
-/* ==================================================
-   Time / date utilities
-   ================================================== */
-function pad(n) { return String(n).padStart(2, '0'); }
+function gisReady() { return typeof google !== 'undefined' && google.accounts && google.accounts.oauth2; }
 
-function formatDateKey(d) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-function formatDateDisplay(d) {
-  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
-}
-function formatWeekday(d) {
-  return WEEKDAY_JP[d.getDay()];
-}
-function formatTime(d) {
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-function formatDateTimeFull(d) {
-  return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${formatWeekday(d)} ${formatTime(d)}`;
-}
-function timeOfDayFraction(d) {
-  return FRACTION(d.getHours(), d.getMinutes());
-}
-function dateOnly(d) {
-  const x = new Date(d);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-function addDays(d, n) {
-  const x = new Date(d);
-  x.setDate(x.getDate() + n);
-  return x;
-}
-
-/* ==================================================
-   Shift sessions
-   ================================================== */
-function getOpenShift() {
-  return state.shifts.find(s => s.clockIn && !s.clockOut) || null;
-}
-
-function clockIn() {
-  const open = getOpenShift();
-  if (open) {
-    toast('既に出勤中です。退勤を押してから再度出勤してください。', 'error');
-    return;
-  }
-  state.shifts.push({
-    id: 'sh_' + Date.now(),
-    clockIn: new Date().toISOString(),
-    clockOut: null,
+function initTokenClient() {
+  if (!gisReady() || !state.settings.clientId) return false;
+  if (state.auth.tokenClient) return true;
+  state.auth.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: state.settings.clientId,
+    scope: SHEETS_SCOPE,
+    callback: (resp) => {
+      if (resp.error) {
+        const r = state.auth.pendingReject;
+        state.auth.pendingResolve = null;
+        state.auth.pendingReject = null;
+        if (r) r(new Error(resp.error_description || resp.error));
+        return;
+      }
+      state.auth.accessToken = resp.access_token;
+      state.auth.expiresAt = Date.now() + (resp.expires_in - 30) * 1000;
+      const r = state.auth.pendingResolve;
+      state.auth.pendingResolve = null;
+      state.auth.pendingReject = null;
+      if (r) r(resp.access_token);
+    }
   });
-  saveShifts();
-  toast('出勤を記録しました', 'success');
-  renderClock();
+  return true;
 }
 
-function clockOut() {
-  const open = getOpenShift();
-  if (!open) {
-    toast('出勤記録がありません', 'error');
-    return;
+function requestToken(prompt = '') {
+  return new Promise((resolve, reject) => {
+    if (!initTokenClient()) {
+      reject(new Error('Google Identity Services が初期化できません (Client ID未設定?)'));
+      return;
+    }
+    state.auth.pendingResolve = resolve;
+    state.auth.pendingReject = reject;
+    try {
+      state.auth.tokenClient.requestAccessToken({ prompt });
+    } catch (e) {
+      state.auth.pendingResolve = null;
+      state.auth.pendingReject = null;
+      reject(e);
+    }
+  });
+}
+
+async function ensureToken() {
+  if (state.auth.accessToken && Date.now() < state.auth.expiresAt) {
+    return state.auth.accessToken;
   }
-  open.clockOut = new Date().toISOString();
-  saveShifts();
-  toast('退勤を記録しました', 'success');
-  renderClock();
-}
-
-function deleteShift(id) {
-  state.shifts = state.shifts.filter(s => s.id !== id);
-  saveShifts();
-  renderClock();
-}
-
-/* Find session associated with a shift type on a given date */
-function findSessionForDate(dateKey, role) {
-  // role:
-  //   'start' → session whose clockIn is on dateKey (日勤・夜勤・25勤の打刻日)
-  //   'wake'  → session whose clockIn is on (dateKey - 1 day)  (明 day uses prev day's session)
-  if (role === 'start') {
-    return state.shifts.find(s =>
-      s.clockIn && formatDateKey(new Date(s.clockIn)) === dateKey
-    );
+  // try silent refresh
+  try {
+    return await requestToken('');
+  } catch (e) {
+    throw e;
   }
-  if (role === 'wake') {
-    const d = new Date(dateKey + 'T00:00:00');
-    const prevKey = formatDateKey(addDays(d, -1));
-    return state.shifts.find(s =>
-      s.clockIn && formatDateKey(new Date(s.clockIn)) === prevKey
-    );
-  }
-  return null;
 }
 
-/* ==================================================
-   Schedule data
-   ================================================== */
-function shiftFromSchedule(date, doctor, scheduleData) {
-  if (!scheduleData || !scheduleData.days) return null;
-  const dayKey = formatDateKey(date);
-  const day = scheduleData.days[dayKey];
+function isAuthed() {
+  return !!state.auth.accessToken && Date.now() < state.auth.expiresAt;
+}
+
+function signOut() {
+  if (state.auth.accessToken) {
+    try { google.accounts.oauth2.revoke(state.auth.accessToken, () => {}); } catch {}
+  }
+  state.auth.accessToken = null;
+  state.auth.expiresAt = 0;
+  setSyncStatus('offline');
+  toast('サインアウトしました', 'success');
+  showView('auth');
+}
+
+/* ================================================== HTTP helper ================================================== */
+async function gApi(method, url, body, retry = true) {
+  const token = await ensureToken();
+  const opts = {
+    method,
+    headers: { 'Authorization': `Bearer ${token}` },
+  };
+  if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opts);
+  if (res.status === 401 && retry) {
+    state.auth.accessToken = null;
+    return gApi(method, url, body, false);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API ${res.status}: ${text.slice(0, 300)}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+/* ================================================== Drive API ================================================== */
+async function findFolder() {
+  const q = encodeURIComponent(`name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`);
+  return r.files?.[0]?.id || null;
+}
+async function createFolder() {
+  const r = await gApi('POST', 'https://www.googleapis.com/drive/v3/files', {
+    name: FOLDER_NAME,
+    mimeType: 'application/vnd.google-apps.folder',
+  });
+  return r.id;
+}
+async function ensureFolder() {
+  if (state.cache.folderId) {
+    // verify it still exists
+    try {
+      const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files/${state.cache.folderId}?fields=id,trashed`);
+      if (r && !r.trashed) return state.cache.folderId;
+    } catch {}
+    state.cache.folderId = null;
+  }
+  let id = await findFolder();
+  if (!id) id = await createFolder();
+  state.cache.folderId = id;
+  saveCache();
+  return id;
+}
+
+async function findSheetInFolder(folderId, name) {
+  const q = encodeURIComponent(`name='${name}' and '${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
+  const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  return r.files?.[0]?.id || null;
+}
+async function createSheetInFolder(folderId, name) {
+  const r = await gApi('POST', 'https://www.googleapis.com/drive/v3/files', {
+    name,
+    mimeType: 'application/vnd.google-apps.spreadsheet',
+    parents: [folderId],
+  });
+  return r.id;
+}
+
+async function listMonthlySheets(folderId) {
+  const q = encodeURIComponent(`'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
+  const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=name desc&pageSize=24`);
+  return r.files || [];
+}
+
+/* ================================================== Sheets API ================================================== */
+async function sheetsBatchUpdate(spreadsheetId, requests) {
+  return gApi('POST', `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, { requests });
+}
+async function sheetsValuesBatchUpdate(spreadsheetId, data, valueInputOption = 'USER_ENTERED') {
+  return gApi('POST', `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchUpdate`,
+    { valueInputOption, data });
+}
+async function sheetsValuesGet(spreadsheetId, range, opts = {}) {
+  const params = new URLSearchParams({ valueRenderOption: opts.valueRenderOption || 'FORMATTED_VALUE' });
+  return gApi('GET', `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?${params}`);
+}
+
+function buildInitRequests(year, month, doctorName) {
+  const sheetId = 0;
+  const numFmtTime = { type: 'TIME', pattern: 'h:mm' };
+  const numFmtDate = { type: 'DATE', pattern: 'd' };
+  const numFmtDow  = { type: 'DATE', pattern: 'ddd' };
+  const numFmtCum  = { type: 'TIME', pattern: '[h]:mm' };
+  const numFmtNum  = { type: 'NUMBER', pattern: '0.00' };
+
+  const rows4to34 = [];
+  for (let i = 0; i < 31; i++) {
+    const row = i + 4;
+    const aF = i === 0 ? '=DATE(C1,C2,1)' : `=A${row - 1}+1`;
+    rows4to34.push({
+      values: [
+        { userEnteredValue: { formulaValue: aF }, userEnteredFormat: { numberFormat: numFmtDate, horizontalAlignment: 'CENTER' } },
+        { userEnteredValue: { formulaValue: `=A${row}` }, userEnteredFormat: { numberFormat: numFmtDow, horizontalAlignment: 'CENTER' } },
+        { userEnteredFormat: { horizontalAlignment: 'CENTER' } },
+        { userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
+        { userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
+        { userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
+        { userEnteredValue: { formulaValue: `=D${row}+(F${row}-E${row})` }, userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
+      ]
+    });
+  }
+
+  return [
+    { updateSpreadsheetProperties: { properties: { locale: 'ja_JP', timeZone: 'Asia/Tokyo' }, fields: 'locale,timeZone' } },
+    { updateSheetProperties: { properties: { sheetId, title: ymKey(year, month) }, fields: 'title' } },
+    { mergeCells: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 2 }, mergeType: 'MERGE_ALL' } },
+    {
+      updateCells: {
+        start: { sheetId, rowIndex: 0, columnIndex: 0 },
+        rows: [
+          { values: [
+            { userEnteredValue: { stringValue: doctorName }, userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 12 } } },
+            {},
+            { userEnteredValue: { numberValue: year }, userEnteredFormat: { horizontalAlignment: 'RIGHT' } },
+            { userEnteredValue: { stringValue: '年' } },
+            { userEnteredValue: { stringValue: '予定時間外' } },
+            { userEnteredValue: { numberValue: 0 }, userEnteredFormat: { numberFormat: numFmtNum, horizontalAlignment: 'RIGHT' } },
+            { userEnteredValue: { stringValue: '時間' } },
+          ]},
+          { values: [
+            {}, {},
+            { userEnteredValue: { numberValue: month }, userEnteredFormat: { horizontalAlignment: 'RIGHT' } },
+            { userEnteredValue: { stringValue: '月' } },
+            { userEnteredValue: { stringValue: '80時間まで' } },
+            { userEnteredValue: { formulaValue: '=80-F1' }, userEnteredFormat: { numberFormat: numFmtNum, horizontalAlignment: 'RIGHT' } },
+            { userEnteredValue: { stringValue: '時間' } },
+          ]},
+          { values: [
+            { userEnteredValue: { stringValue: '日付' } },
+            { userEnteredValue: { stringValue: '曜日' } },
+            { userEnteredValue: { stringValue: '勤務' } },
+            { userEnteredValue: { stringValue: '勤務開始前の時間外時間' } },
+            { userEnteredValue: { stringValue: '時間外開始時刻' } },
+            { userEnteredValue: { stringValue: '時間外終了時刻' } },
+            { userEnteredValue: { stringValue: '時間外時間' } },
+          ].map(c => ({ ...c, userEnteredFormat: { textFormat: { bold: true }, horizontalAlignment: 'CENTER', backgroundColor: { red: 0.95, green: 0.93, blue: 0.87 } } })) },
+        ],
+        fields: 'userEnteredValue,userEnteredFormat'
+      }
+    },
+    {
+      updateCells: {
+        start: { sheetId, rowIndex: 3, columnIndex: 0 },
+        rows: rows4to34,
+        fields: 'userEnteredValue,userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+      }
+    },
+    {
+      updateCells: {
+        start: { sheetId, rowIndex: 34, columnIndex: 0 },
+        rows: [{
+          values: [
+            { userEnteredValue: { stringValue: '合計時間外' }, userEnteredFormat: { textFormat: { bold: true } } },
+            {}, {}, {}, {}, {},
+            { userEnteredValue: { formulaValue: '=SUM(G4:G34)' }, userEnteredFormat: { numberFormat: numFmtCum, horizontalAlignment: 'CENTER', textFormat: { bold: true } } },
+          ]
+        }],
+        fields: 'userEnteredValue,userEnteredFormat'
+      }
+    },
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 60 }, fields: 'pixelSize' } },
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 50 }, fields: 'pixelSize' } },
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 70 }, fields: 'pixelSize' } },
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 7 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+    {
+      updateBorders: {
+        range: { sheetId, startRowIndex: 2, endRowIndex: 35, startColumnIndex: 0, endColumnIndex: 7 },
+        top: { style: 'SOLID' }, bottom: { style: 'SOLID' }, left: { style: 'SOLID' }, right: { style: 'SOLID' },
+        innerHorizontal: { style: 'SOLID' }, innerVertical: { style: 'SOLID' }
+      }
+    },
+  ];
+}
+
+/* ================================================== Sheet orchestration ================================================== */
+async function getOrCreateMonthlySheet(year, month) {
+  const key = ymKey(year, month);
+  // Check cache
+  if (state.cache.sheets[key]) {
+    try {
+      const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files/${state.cache.sheets[key]}?fields=id,trashed`);
+      if (r && !r.trashed) return state.cache.sheets[key];
+    } catch {}
+    delete state.cache.sheets[key];
+  }
+  const folderId = await ensureFolder();
+  const sheetName = `${key}_${state.currentDoctor}`;
+  let id = await findSheetInFolder(folderId, sheetName);
+  if (!id) {
+    id = await createSheetInFolder(folderId, sheetName);
+    // Initialize structure
+    await sheetsBatchUpdate(id, buildInitRequests(year, month, state.currentDoctor));
+    // Try to populate 勤務 column from schedule
+    await populateScheduleColumn(id, year, month).catch(e => console.warn('schedule populate failed:', e));
+  }
+  state.cache.sheets[key] = id;
+  saveCache();
+  return id;
+}
+
+async function populateScheduleColumn(spreadsheetId, year, month) {
+  const sched = await fetchSchedule(year, month).catch(() => null);
+  if (!sched || !sched.days) return;
+  const data = [];
+  for (let day = 1; day <= 31; day++) {
+    const date = new Date(year, month - 1, day);
+    if (date.getMonth() !== month - 1) break;
+    const shift = shiftFromSchedule(date, state.currentDoctor, sched);
+    if (shift) data.push({ range: `C${day + 3}`, values: [[shift]] });
+  }
+  if (data.length > 0) await sheetsValuesBatchUpdate(spreadsheetId, data);
+}
+
+async function readMonthTotal(spreadsheetId) {
+  try {
+    const r = await sheetsValuesGet(spreadsheetId, 'G35', { valueRenderOption: 'FORMATTED_VALUE' });
+    return r.values?.[0]?.[0] || '0:00';
+  } catch (e) { console.warn('readMonthTotal:', e); return null; }
+}
+async function readPlannedAndRemaining(spreadsheetId) {
+  try {
+    const r = await sheetsValuesGet(spreadsheetId, 'F1:F2', { valueRenderOption: 'FORMATTED_VALUE' });
+    return {
+      planned: r.values?.[0]?.[0] || '0',
+      remaining: r.values?.[1]?.[0] || '0',
+    };
+  } catch { return null; }
+}
+
+/* ================================================== Schedule ================================================== */
+const SCHEDULE_REST = [['ake','明'],['off','休'],['trip','出張']];
+function shiftFromSchedule(date, doctor, sched) {
+  if (!sched?.days) return null;
+  const day = sched.days[formatDateKey(date)];
   if (!day) return null;
-  // 25勤 detection: in BOTH day and night
   const inDay = (day.day || []).includes(doctor);
   const inNight = (day.night || []).includes(doctor);
   if (inDay && inNight) return '25勤';
   if (inNight) return '夜勤';
   if (inDay) return '日勤';
-  for (const [key, label] of SCHEDULE_KEYS.slice(2)) {
-    if ((day[key] || []).includes(doctor)) return label;
+  for (const [k, label] of SCHEDULE_REST) {
+    if ((day[k] || []).includes(doctor)) return label;
   }
   return null;
 }
 
-async function fetchScheduleFromUrl(year, month) {
+async function fetchSchedule(year, month) {
+  const key = ymKey(year, month);
+  if (state.scheduleCache[key]) return state.scheduleCache[key];
   const base = (state.settings.scheduleBaseUrl || '').trim();
-  if (!base) {
-    throw new Error('設定で勤務表のベースURLを指定してください');
-  }
+  if (!base) throw new Error('勤務表URLが未設定');
   const sep = base.endsWith('/') ? '' : '/';
-  const url = `${base}${sep}month_${year}-${pad(month)}.json`;
+  const url = `${base}${sep}month_${key}.json`;
   const res = await fetch(url, { cache: 'no-cache' });
-  if (!res.ok) {
-    throw new Error(`取得失敗 (${res.status}): ${url}`);
-  }
-  return res.json();
+  if (!res.ok) throw new Error(`勤務表取得失敗 (${res.status})`);
+  const data = await res.json();
+  state.scheduleCache[key] = data;
+  return data;
 }
 
-/* ==================================================
-   Excel processing
-   ================================================== */
-async function loadExcelMeta(file) {
-  const buf = await file.arrayBuffer();
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buf);
-  const sheets = [];
-  wb.eachSheet((ws) => {
-    const c1 = ws.getCell('C1').value;
-    const c2 = ws.getCell('C2').value;
-    const yr = (typeof c1 === 'number') ? c1 : parseInt(c1);
-    const mo = (typeof c2 === 'number') ? c2 : parseInt(c2);
-    if (yr >= 2020 && yr <= 2050 && mo >= 1 && mo <= 12) {
-      sheets.push({ name: ws.name, year: yr, month: mo });
-    }
-  });
-  return { sheets, raw: wb };
-}
-
-function preShiftOvertime(clockInDate, cutoffH, cutoffM) {
-  const inFrac = timeOfDayFraction(clockInDate);
-  const cutoff = FRACTION(cutoffH, cutoffM);
+/* ================================================== Sync logic ================================================== */
+function preShiftOTFraction(clockInDate, cutH, cutM) {
+  const inFrac = (clockInDate.getHours() * 60 + clockInDate.getMinutes()) / MIN_PER_DAY;
+  const cutoff = FRACTION(cutH, cutM);
   if (inFrac >= cutoff) return 0;
   let ot = cutoff - inFrac;
   if (ot > CAP_30MIN) ot = CAP_30MIN;
   return ot;
 }
-
-function getDoctorRowsForSheet(year, month) {
-  // Returns array of {row, date, dateKey} for each day in month (rows 4..34)
-  const rows = [];
-  for (let r = 4; r <= 34; r++) {
-    const day = r - 3; // row 4 = day 1
-    const date = new Date(year, month - 1, day);
-    if (date.getMonth() !== month - 1) break; // overflow → stop
-    rows.push({ row: r, date, dateKey: formatDateKey(date) });
-  }
-  return rows;
-}
-
-function buildPreviewForSheet(year, month) {
-  const rows = getDoctorRowsForSheet(year, month);
-  return rows.map(({ row, date, dateKey }) => {
-    const shift = state.scheduleData ? shiftFromSchedule(date, state.currentDoctor, state.scheduleData) : null;
-    let D = null, E = null, F = null;
-    let session = null;
-
-    if (shift === '日勤') {
-      session = findSessionForDate(dateKey, 'start');
-      if (session?.clockIn) {
-        const ci = new Date(session.clockIn);
-        const d = preShiftOvertime(ci, 8, 30);
-        if (d > 0) D = d;
-      }
-      if (session?.clockOut) {
-        const co = new Date(session.clockOut);
-        const coF = timeOfDayFraction(co);
-        if (coF > FRACTION(17, 30)) {
-          E = FRACTION(17, 30);
-          F = coF;
-        }
-      }
-    } else if (shift === '夜勤' || shift === '25勤') {
-      session = findSessionForDate(dateKey, 'start');
-      if (session?.clockIn) {
-        const ci = new Date(session.clockIn);
-        const d = preShiftOvertime(ci, 16, 30);
-        if (d > 0) D = d;
-      }
-      // E,F not on this row
-    } else if (shift === '明') {
-      session = findSessionForDate(dateKey, 'wake');
-      if (session?.clockOut) {
-        const co = new Date(session.clockOut);
-        const coF = timeOfDayFraction(co);
-        // Always show E=9:30 if there is an out time greater than 9:30
-        if (coF > FRACTION(9, 30)) {
-          E = FRACTION(9, 30);
-          F = coF;
-        }
-      }
-    }
-    return { row, date, dateKey, shift, D, E, F, hasSession: !!session };
-  });
-}
-
 function fractionToHM(f) {
-  if (f == null) return '';
   const total = Math.round(f * MIN_PER_DAY);
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return `${pad(h)}:${pad(m)}`;
+  return `${Math.floor(total/60)}:${pad(total%60)}`;
 }
 
-async function generateExcel() {
-  if (!state.excelFile || !state.scheduleData) return;
+/**
+ * On clock-in: write C and D for the date of clockIn
+ */
+async function syncClockIn(session) {
+  const ci = new Date(session.clockIn);
+  const year = ci.getFullYear();
+  const month = ci.getMonth() + 1;
+  const day = ci.getDate();
+  const row = day + 3;
 
-  const buf = await state.excelFile.arrayBuffer();
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buf);
+  setSyncStatus('busy');
+  const spreadsheetId = await getOrCreateMonthlySheet(year, month);
 
-  let totalFilled = 0;
-  const sheetReports = [];
+  // Determine shift type from schedule
+  let shift = null;
+  try {
+    const sched = await fetchSchedule(year, month);
+    shift = shiftFromSchedule(ci, state.currentDoctor, sched);
+  } catch (e) { console.warn('schedule fetch:', e); }
 
-  wb.eachSheet((ws) => {
-    const c1 = ws.getCell('C1').value;
-    const c2 = ws.getCell('C2').value;
-    const yr = (typeof c1 === 'number') ? c1 : parseInt(c1);
-    const mo = (typeof c2 === 'number') ? c2 : parseInt(c2);
-    if (!(yr >= 2020 && yr <= 2050 && mo >= 1 && mo <= 12)) return;
+  const updates = [];
+  if (shift) updates.push({ range: `C${row}`, values: [[shift]] });
 
-    // Set name (A1)
-    const a1 = ws.getCell('A1');
-    a1.value = state.currentDoctor;
+  let D = null;
+  if (shift === '日勤') D = preShiftOTFraction(ci, 8, 30);
+  else if (shift === '夜勤' || shift === '25勤') D = preShiftOTFraction(ci, 16, 30);
+  else if (shift === '明') D = null; // no D on 明
+  else {
+    // Unknown shift; default to 日勤 logic if morning, 夜勤 if afternoon
+    D = ci.getHours() < 12 ? preShiftOTFraction(ci, 8, 30) : preShiftOTFraction(ci, 16, 30);
+  }
 
-    let filledOnSheet = 0;
+  if (D != null) {
+    updates.push({ range: `D${row}`, values: [[D > 0 ? fractionToHM(D) : '']] });
+  }
 
-    // Match against schedule data only if year/month matches
-    const sheetMatchesSchedule = (yr === state.scheduleData.year && mo === state.scheduleData.month);
+  if (updates.length > 0) await sheetsValuesBatchUpdate(spreadsheetId, updates);
 
-    const rows = getDoctorRowsForSheet(yr, mo);
-    for (const { row, date, dateKey } of rows) {
-      // Determine shift type from schedule (only if month matches)
-      const shift = sheetMatchesSchedule
-        ? shiftFromSchedule(date, state.currentDoctor, state.scheduleData)
-        : null;
+  // Mark synced
+  if (!session.syncedSheetIds) session.syncedSheetIds = [];
+  if (!session.syncedSheetIds.includes(spreadsheetId)) session.syncedSheetIds.push(spreadsheetId);
+  saveShifts();
 
-      if (shift) {
-        const cellC = ws.getCell(`C${row}`);
-        cellC.value = shift;
-      }
+  await refreshTotals();
+  setSyncStatus('ok');
+}
 
-      // Clear D/E/F first (so stale data is removed) — only when we have schedule
-      // info for this month, so we don't blow away manual entries on unrelated months
-      if (sheetMatchesSchedule) {
-        ws.getCell(`D${row}`).value = null;
-        ws.getCell(`E${row}`).value = null;
-        ws.getCell(`F${row}`).value = null;
-      }
+/**
+ * On clock-out: write E and F to appropriate row based on shift type
+ */
+async function syncClockOut(session) {
+  const ci = new Date(session.clockIn);
+  const co = new Date(session.clockOut);
 
-      // Fill D/E/F based on rules
-      let D = null, E = null, F = null;
-      const effectiveShift = shift || (ws.getCell(`C${row}`).value || '').toString();
+  // Determine shift on clock-in date
+  const ciYear = ci.getFullYear();
+  const ciMonth = ci.getMonth() + 1;
+  let shift = null;
+  try {
+    const sched = await fetchSchedule(ciYear, ciMonth);
+    shift = shiftFromSchedule(ci, state.currentDoctor, sched);
+  } catch {}
 
-      if (effectiveShift === '日勤') {
-        const sess = findSessionForDate(dateKey, 'start');
-        if (sess?.clockIn) {
-          const ci = new Date(sess.clockIn);
-          const d = preShiftOvertime(ci, 8, 30);
-          if (d > 0) D = d;
-        }
-        if (sess?.clockOut) {
-          const co = new Date(sess.clockOut);
-          const coF = timeOfDayFraction(co);
-          if (coF > FRACTION(17, 30)) {
-            E = FRACTION(17, 30);
-            F = coF;
-          }
-        }
-      } else if (effectiveShift === '夜勤' || effectiveShift === '25勤') {
-        const sess = findSessionForDate(dateKey, 'start');
-        if (sess?.clockIn) {
-          const ci = new Date(sess.clockIn);
-          const d = preShiftOvertime(ci, 16, 30);
-          if (d > 0) D = d;
-        }
-      } else if (effectiveShift === '明') {
-        const sess = findSessionForDate(dateKey, 'wake');
-        if (sess?.clockOut) {
-          const co = new Date(sess.clockOut);
-          const coF = timeOfDayFraction(co);
-          if (coF > FRACTION(9, 30)) {
-            E = FRACTION(9, 30);
-            F = coF;
-          }
-        }
-      }
-
-      if (D != null) {
-        const c = ws.getCell(`D${row}`);
-        c.value = D;
-        c.numFmt = 'h:mm';
-        filledOnSheet++;
-      }
-      if (E != null) {
-        const c = ws.getCell(`E${row}`);
-        c.value = E;
-        c.numFmt = 'h:mm';
-      }
-      if (F != null) {
-        const c = ws.getCell(`F${row}`);
-        c.value = F;
-        c.numFmt = 'h:mm';
-      }
+  // Decide target row & sheet
+  // 日勤: clockIn date's row
+  // 夜勤/25勤: clockIn date + 1's row (the 明 day)
+  // unknown: heuristic
+  let targetDate;
+  let eTime;
+  if (shift === '日勤') {
+    targetDate = ci;
+    eTime = '17:30';
+  } else if (shift === '夜勤' || shift === '25勤') {
+    targetDate = addDays(ci, 1);
+    eTime = '9:30';
+  } else if (shift === '明') {
+    // unusual: clock-in itself was on 明 day
+    targetDate = ci;
+    eTime = '9:30';
+  } else {
+    // Heuristic based on duration
+    const hours = (co - ci) / 3600000;
+    if (hours > 16) {
+      targetDate = addDays(ci, 1);
+      eTime = '9:30';
+    } else {
+      targetDate = ci;
+      eTime = '17:30';
     }
+  }
 
-    sheetReports.push({ name: ws.name, year: yr, month: mo, filled: filledOnSheet, matched: sheetMatchesSchedule });
-    totalFilled += filledOnSheet;
-  });
+  setSyncStatus('busy');
+  const tYear = targetDate.getFullYear();
+  const tMonth = targetDate.getMonth() + 1;
+  const tDay = targetDate.getDate();
+  const row = tDay + 3;
 
-  // Output
-  const out = await wb.xlsx.writeBuffer();
-  const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  const baseSheet = sheetReports.find(r => r.matched) || sheetReports[0];
-  const fname = baseSheet
-    ? `時間外管理_${state.currentDoctor}_${baseSheet.year}-${pad(baseSheet.month)}.xlsx`
-    : `時間外管理_${state.currentDoctor}.xlsx`;
+  const spreadsheetId = await getOrCreateMonthlySheet(tYear, tMonth);
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fname;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // Compute E and F: only write if clock-out time is after the cutoff
+  const eFrac = parseTimeStringToFraction(eTime);
+  const coFrac = (co.getHours() * 60 + co.getMinutes()) / MIN_PER_DAY;
 
-  toast(`生成完了 (${totalFilled} セル更新)`, 'success');
-  return sheetReports;
+  const updates = [];
+  if (coFrac > eFrac) {
+    updates.push({ range: `E${row}`, values: [[eTime]] });
+    updates.push({ range: `F${row}`, values: [[`${co.getHours()}:${pad(co.getMinutes())}`]] });
+  } else {
+    // No overtime; clear cells
+    updates.push({ range: `E${row}`, values: [['']] });
+    updates.push({ range: `F${row}`, values: [['']] });
+  }
+
+  // For 夜勤/25勤, also ensure C of target row is "明" if not set by schedule
+  if ((shift === '夜勤' || shift === '25勤')) {
+    let targetShift = null;
+    try {
+      const sched = await fetchSchedule(tYear, tMonth);
+      targetShift = shiftFromSchedule(targetDate, state.currentDoctor, sched);
+    } catch {}
+    if (!targetShift) {
+      updates.push({ range: `C${row}`, values: [['明']] });
+    }
+  }
+
+  if (updates.length > 0) await sheetsValuesBatchUpdate(spreadsheetId, updates);
+
+  if (!session.syncedSheetIds) session.syncedSheetIds = [];
+  if (!session.syncedSheetIds.includes(spreadsheetId)) session.syncedSheetIds.push(spreadsheetId);
+  saveShifts();
+
+  await refreshTotals();
+  setSyncStatus('ok');
 }
 
-/* ==================================================
-   Rendering
-   ================================================== */
+function parseTimeStringToFraction(s) {
+  const [h, m] = s.split(':').map(Number);
+  return FRACTION(h, m);
+}
+
+/**
+ * Delete a session: clear D/E/F on the relevant rows
+ */
+async function syncDeleteSession(session) {
+  if (!session.syncedSheetIds || session.syncedSheetIds.length === 0) return;
+  setSyncStatus('busy');
+  // For each sheet the session touched, clear the relevant row(s)
+  // We don't know exactly which row, so we recompute based on session
+  const ci = new Date(session.clockIn);
+  const co = session.clockOut ? new Date(session.clockOut) : null;
+
+  for (const spreadsheetId of session.syncedSheetIds) {
+    const updates = [];
+    // Clock-in date row: clear D
+    updates.push({ range: `D${ci.getDate() + 3}`, values: [['']] });
+    // Clock-out target row: clear E, F
+    let targetDate = ci;
+    if (co) {
+      // Heuristic same as syncClockOut
+      const hours = (co - ci) / 3600000;
+      if (hours > 16) targetDate = addDays(ci, 1);
+    }
+    updates.push({ range: `E${targetDate.getDate() + 3}`, values: [['']] });
+    updates.push({ range: `F${targetDate.getDate() + 3}`, values: [['']] });
+    try {
+      await sheetsValuesBatchUpdate(spreadsheetId, updates);
+    } catch (e) { console.warn('delete sync:', e); }
+  }
+  await refreshTotals();
+  setSyncStatus('ok');
+}
+
+async function refreshTotals() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const key = ymKey(y, m);
+  const sid = state.cache.sheets[key];
+  if (!sid) {
+    setStat('--:--', '--:--', '0', y, m, null);
+    return;
+  }
+  try {
+    const [tot, fr] = await Promise.all([
+      readMonthTotal(sid),
+      readPlannedAndRemaining(sid)
+    ]);
+    state.monthlyTotals[key] = tot;
+    setStat(tot, fr?.remaining + 'h', fr?.planned, y, m, sid);
+  } catch (e) {
+    console.warn('refreshTotals:', e);
+  }
+}
+
+function setStat(total, remainingHours, planned, year, month, sid) {
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-month').textContent = `${month}月`;
+  document.getElementById('stat-remaining').textContent = remainingHours;
+  document.getElementById('stat-planned').textContent = `予定 ${planned}h`;
+  const link = document.getElementById('sheet-link');
+  if (sid) {
+    link.href = `https://docs.google.com/spreadsheets/d/${sid}/edit`;
+    link.style.display = '';
+  } else {
+    link.style.display = 'none';
+  }
+}
+
+/* ================================================== Clock in/out ================================================== */
+function getOpenShift() { return state.shifts.find(s => s.clockIn && !s.clockOut) || null; }
+
+async function clockInAction() {
+  if (getOpenShift()) { toast('既に出勤中です', 'error'); return; }
+  const session = {
+    id: 'sh_' + Date.now(),
+    clockIn: new Date().toISOString(),
+    clockOut: null,
+    syncedSheetIds: [],
+  };
+  state.shifts.push(session);
+  saveShifts();
+  toast('出勤を記録しました', 'success');
+  renderClock();
+
+  if (isAuthed() || state.settings.clientId) {
+    try {
+      await syncClockIn(session);
+    } catch (e) {
+      console.error(e);
+      setSyncStatus('warn');
+      toast('同期失敗: ' + e.message, 'error');
+    }
+  }
+  renderClock();
+}
+
+async function clockOutAction() {
+  const open = getOpenShift();
+  if (!open) { toast('出勤記録がありません', 'error'); return; }
+  open.clockOut = new Date().toISOString();
+  saveShifts();
+  toast('退勤を記録しました', 'success');
+  renderClock();
+
+  if (isAuthed() || state.settings.clientId) {
+    try {
+      await syncClockOut(open);
+    } catch (e) {
+      console.error(e);
+      setSyncStatus('warn');
+      toast('同期失敗: ' + e.message, 'error');
+    }
+  }
+  renderClock();
+}
+
+async function deleteShiftAction(id) {
+  const session = state.shifts.find(s => s.id === id);
+  if (!session) return;
+  // Try to clear from sheets first
+  if (isAuthed() && session.syncedSheetIds?.length) {
+    try { await syncDeleteSession(session); } catch (e) { console.warn(e); }
+  }
+  state.shifts = state.shifts.filter(s => s.id !== id);
+  saveShifts();
+  renderClock();
+  toast('削除しました', 'success');
+}
+
+async function resyncAll() {
+  setSyncStatus('busy');
+  let count = 0;
+  for (const s of state.shifts) {
+    try {
+      await syncClockIn(s);
+      if (s.clockOut) await syncClockOut(s);
+      count++;
+    } catch (e) { console.warn(e); }
+  }
+  setSyncStatus('ok');
+  toast(`${count}件を再送信しました`, 'success');
+  renderClock();
+}
+
+/* ================================================== Rendering ================================================== */
 function renderDoctorSelect() {
   const grid = document.getElementById('doctor-grid');
   grid.innerHTML = '';
@@ -1297,19 +1823,18 @@ function renderDoctorSelect() {
 
 function renderClock() {
   if (!state.currentDoctor) return;
-
-  document.getElementById('doctor-name-clock').textContent = state.currentDoctor;
-  document.getElementById('doctor-name-excel').textContent = state.currentDoctor;
-  document.getElementById('doctor-name-settings').textContent = state.currentDoctor;
+  ['doctor-name-clock','doctor-name-monthly','doctor-name-settings','doctor-name-auth'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = state.currentDoctor;
+  });
   document.getElementById('settings-banner').style.display = '';
+  document.getElementById('signout-btn').style.display = isAuthed() ? '' : 'none';
 
-  // Clock display
   const now = new Date();
   document.getElementById('now-time').textContent = formatTime(now);
   document.getElementById('now-date').textContent =
     `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} (${formatWeekday(now)})`;
 
-  // Clock toggle button
   const open = getOpenShift();
   const btn = document.getElementById('clock-toggle');
   const dot = document.getElementById('status-dot');
@@ -1318,8 +1843,7 @@ function renderClock() {
     btn.textContent = '退　勤';
     btn.className = 'big-btn clock-out';
     dot.classList.add('active');
-    const ci = new Date(open.clockIn);
-    txt.innerHTML = `勤務中　<strong>${formatDateTimeFull(ci)}</strong> 〜`;
+    txt.innerHTML = `勤務中　<strong>${formatDateTimeFull(new Date(open.clockIn))}</strong> 〜`;
   } else {
     btn.textContent = '出　勤';
     btn.className = 'big-btn';
@@ -1327,7 +1851,6 @@ function renderClock() {
     txt.textContent = '勤務外';
   }
 
-  // Recent shifts (last 5)
   renderShiftsList(5);
 }
 
@@ -1336,21 +1859,20 @@ function renderShiftsList(limit = null) {
   list.innerHTML = '';
   const sorted = [...state.shifts].sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
   const items = limit ? sorted.slice(0, limit) : sorted;
-
   if (items.length === 0) {
     list.innerHTML = '<p class="empty-state">打刻履歴はまだありません</p>';
     return;
   }
-
   const wrap = document.createElement('div');
   wrap.className = 'shift-list';
   for (const s of items) {
     const ci = new Date(s.clockIn);
     const co = s.clockOut ? new Date(s.clockOut) : null;
+    const synced = s.syncedSheetIds && s.syncedSheetIds.length > 0;
     const row = document.createElement('div');
-    row.className = 'shift-row';
+    row.className = 'shift-row' + (synced ? '' : ' unsynced');
     row.innerHTML = `
-      <div class="date">${formatDateDisplay(ci)}<small>${formatWeekday(ci)}曜</small></div>
+      <div class="date">${formatDateDisplay(ci)}<small>${formatWeekday(ci)}曜${synced ? ' ✓' : ' ⌛'}</small></div>
       <div class="time"><span class="label-tiny">出勤</span>${formatTime(ci)}</div>
       <div class="time"><span class="label-tiny">退勤</span>${co ? formatTime(co) + (formatDateKey(ci) !== formatDateKey(co) ? ' <span style="font-size:9px;color:var(--ink-mute)">(翌)</span>' : '') : '<span style="color:var(--ink-mute)">未</span>'}</div>
       <div class="actions">
@@ -1362,10 +1884,11 @@ function renderShiftsList(limit = null) {
   }
   list.appendChild(wrap);
 
-  // Bind events
   list.querySelectorAll('[data-del-shift]').forEach(b => {
-    b.addEventListener('click', () => {
-      if (confirm('この打刻を削除しますか?')) deleteShift(b.dataset.delShift);
+    b.addEventListener('click', async () => {
+      if (confirm('この打刻を削除しますか? (スプレッドシートからも削除されます)')) {
+        await deleteShiftAction(b.dataset.delShift);
+      }
     });
   });
   list.querySelectorAll('[data-edit-shift]').forEach(b => {
@@ -1373,80 +1896,67 @@ function renderShiftsList(limit = null) {
   });
 }
 
-/* Excel preview */
-function renderPreview() {
-  const area = document.getElementById('preview-area');
-  if (!state.excelFile || !state.scheduleData) {
-    area.innerHTML = '<p class="empty-state">エクセルと勤務表データの両方が必要です</p>';
-    document.getElementById('generate-btn').disabled = true;
+async function renderMonthly() {
+  const list = document.getElementById('monthly-list');
+  list.innerHTML = '<p class="empty-state"><span class="spinner"></span> 読み込み中…</p>';
+  if (!isAuthed()) {
+    list.innerHTML = '<p class="empty-state">Google サインインが必要です</p>';
     return;
   }
-
-  const sched = state.scheduleData;
-  const previews = buildPreviewForSheet(sched.year, sched.month);
-
-  let countD = 0, countE = 0, countF = 0, countShift = 0;
-  for (const p of previews) {
-    if (p.shift) countShift++;
-    if (p.D != null) countD++;
-    if (p.E != null) countE++;
-    if (p.F != null) countF++;
+  try {
+    const folderId = await ensureFolder();
+    const files = await listMonthlySheets(folderId);
+    const myFiles = files.filter(f => f.name.endsWith(`_${state.currentDoctor}`));
+    if (myFiles.length === 0) {
+      list.innerHTML = '<p class="empty-state">まだスプレッドシートが作成されていません</p>';
+      return;
+    }
+    list.innerHTML = '';
+    const now = new Date();
+    const currentKey = ymKey(now.getFullYear(), now.getMonth() + 1);
+    for (const f of myFiles) {
+      const m = f.name.match(/^(\d{4}-\d{2})_/);
+      if (!m) continue;
+      const key = m[1];
+      // Update cache
+      state.cache.sheets[key] = f.id;
+      // Read total
+      let total = '?';
+      try { total = await readMonthTotal(f.id); } catch {}
+      const isCurrent = key === currentKey;
+      const row = document.createElement('a');
+      row.className = 'month-row' + (isCurrent ? ' current' : '');
+      row.href = `https://docs.google.com/spreadsheets/d/${f.id}/edit`;
+      row.target = '_blank';
+      row.rel = 'noopener';
+      row.innerHTML = `
+        <div class="month-label">${key}<small>${formatWeekday(new Date(key + '-01'))}スタート</small></div>
+        <div class="month-total">${total}</div>
+      `;
+      list.appendChild(row);
+    }
+    saveCache();
+  } catch (e) {
+    console.error(e);
+    list.innerHTML = `<p class="empty-state">読み込み失敗: ${e.message}</p>`;
   }
-
-  let html = `
-    <div style="margin-bottom:10px;">
-      <span class="info-pill success">${sched.year}年${sched.month}月</span>
-      <span class="info-pill">勤務 ${countShift}日</span>
-      <span class="info-pill">D ${countD}件</span>
-      <span class="info-pill">E ${countE}件</span>
-      <span class="info-pill">F ${countF}件</span>
-    </div>
-    <div class="preview-wrap">
-      <table class="preview-table">
-        <thead>
-          <tr><th>日</th><th>曜</th><th>勤務</th><th>D 開始前</th><th>E 開始</th><th>F 終了</th></tr>
-        </thead>
-        <tbody>
-  `;
-  for (const p of previews) {
-    const wd = p.date.getDay();
-    const cls = (wd === 0 || wd === 6) ? 'weekend' : '';
-    html += `
-      <tr class="${cls}">
-        <td>${p.date.getDate()}</td>
-        <td>${formatWeekday(p.date)}</td>
-        <td class="shift">${p.shift || ''}</td>
-        <td>${fractionToHM(p.D)}</td>
-        <td>${fractionToHM(p.E)}</td>
-        <td>${fractionToHM(p.F)}</td>
-      </tr>
-    `;
-  }
-  html += '</tbody></table></div>';
-  area.innerHTML = html;
-  document.getElementById('generate-btn').disabled = false;
 }
 
-/* ==================================================
-   Modal: shift editor
-   ================================================== */
+/* ================================================== Modal: shift editor ================================================== */
 function openShiftEditor(id, isNew = false) {
   let shift;
   if (isNew) {
     const now = new Date();
-    shift = { id: 'sh_' + Date.now(), clockIn: now.toISOString(), clockOut: null };
+    shift = { id: 'sh_' + Date.now(), clockIn: now.toISOString(), clockOut: null, syncedSheetIds: [] };
   } else {
     shift = state.shifts.find(s => s.id === id);
     if (!shift) return;
   }
-
   const fmtForInput = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
-    const localISO = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString();
-    return localISO.slice(0, 16);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   };
-
   showModal(`
     <h3>${isNew ? '打刻を手動追加' : '打刻を編集'}</h3>
     <div class="field">
@@ -1459,83 +1969,54 @@ function openShiftEditor(id, isNew = false) {
     </div>
     <div class="modal-actions">
       <button class="btn outline" data-modal-close>キャンセル</button>
-      <button class="btn" id="modal-save">保存</button>
+      <button class="btn" id="modal-save">保存して同期</button>
     </div>
   `);
-
-  document.getElementById('modal-save').addEventListener('click', () => {
+  document.getElementById('modal-save').addEventListener('click', async () => {
     const inV = document.getElementById('edit-in').value;
     const outV = document.getElementById('edit-out').value;
     if (!inV) { toast('出勤日時は必須です', 'error'); return; }
-    shift.clockIn = new Date(inV).toISOString();
-    shift.clockOut = outV ? new Date(outV).toISOString() : null;
+    const newIn = new Date(inV).toISOString();
+    const newOut = outV ? new Date(outV).toISOString() : null;
+    if (newOut && new Date(newOut) < new Date(newIn)) { toast('退勤が出勤より前です', 'error'); return; }
 
-    if (shift.clockOut && new Date(shift.clockOut) < new Date(shift.clockIn)) {
-      toast('退勤が出勤より前です', 'error'); return;
+    // If editing existing, attempt to clear old sheet data first
+    if (!isNew && isAuthed() && shift.syncedSheetIds?.length) {
+      try { await syncDeleteSession(shift); } catch {}
     }
 
+    shift.clockIn = newIn;
+    shift.clockOut = newOut;
+    shift.syncedSheetIds = [];
     if (isNew) state.shifts.push(shift);
     saveShifts();
     closeModal();
+    renderClock();
+
+    // Sync new state
+    if (isAuthed()) {
+      try {
+        await syncClockIn(shift);
+        if (shift.clockOut) await syncClockOut(shift);
+      } catch (e) {
+        toast('同期失敗: ' + e.message, 'error');
+      }
+    }
     renderClock();
     toast('保存しました', 'success');
   });
 }
 
-function showAllShifts() {
-  let html = '<h3>全打刻履歴</h3><div id="all-shifts-list"></div>';
-  html += '<div class="modal-actions"><button class="btn outline" data-modal-close>閉じる</button></div>';
-  showModal(html);
-  // Re-render shifts list inside modal
-  const tmpList = document.getElementById('all-shifts-list');
-  const sorted = [...state.shifts].sort((a, b) => new Date(b.clockIn) - new Date(a.clockIn));
-  if (sorted.length === 0) {
-    tmpList.innerHTML = '<p class="empty-state">履歴なし</p>';
-    return;
-  }
-  let h = '<div class="shift-list">';
-  for (const s of sorted) {
-    const ci = new Date(s.clockIn);
-    const co = s.clockOut ? new Date(s.clockOut) : null;
-    h += `
-      <div class="shift-row">
-        <div class="date">${formatDateDisplay(ci)}<small>${formatWeekday(ci)}曜</small></div>
-        <div class="time"><span class="label-tiny">出勤</span>${formatTime(ci)}</div>
-        <div class="time"><span class="label-tiny">退勤</span>${co ? formatTime(co) : '<span style="color:var(--ink-mute)">未</span>'}</div>
-        <div class="actions"><button class="icon-btn danger" data-del-shift="${s.id}">削除</button></div>
-      </div>
-    `;
-  }
-  h += '</div>';
-  tmpList.innerHTML = h;
-  tmpList.querySelectorAll('[data-del-shift]').forEach(b => {
-    b.addEventListener('click', () => {
-      if (confirm('削除しますか?')) {
-        deleteShift(b.dataset.delShift);
-        showAllShifts(); // re-open
-      }
-    });
-  });
-}
-
-/* ==================================================
-   Modal helpers
-   ================================================== */
+/* ================================================== Modal helpers ================================================== */
 function showModal(html) {
   const m = document.getElementById('modal');
   document.getElementById('modal-content').innerHTML = html;
   m.classList.add('show');
-  m.querySelectorAll('[data-modal-close]').forEach(b => {
-    b.addEventListener('click', closeModal);
-  });
+  m.querySelectorAll('[data-modal-close]').forEach(b => b.addEventListener('click', closeModal));
 }
-function closeModal() {
-  document.getElementById('modal').classList.remove('show');
-}
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
 
-/* ==================================================
-   Toast
-   ================================================== */
+/* ================================================== Toast ================================================== */
 let toastTimer = null;
 function toast(msg, type = '') {
   const t = document.getElementById('toast');
@@ -1545,32 +2026,31 @@ function toast(msg, type = '') {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-/* ==================================================
-   View navigation
-   ================================================== */
+/* ================================================== Views ================================================== */
 function showView(name) {
   state.currentView = name;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(`view-${name}`).classList.add('active');
-
   const nav = document.getElementById('bottom-nav');
-  if (name === 'select') {
+  if (name === 'select' || name === 'auth') {
     nav.style.display = 'none';
   } else {
     nav.style.display = '';
-    nav.querySelectorAll('button').forEach(b => {
-      b.classList.toggle('active', b.dataset.view === name);
-    });
+    nav.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   }
-
-  if (name === 'clock') renderClock();
-  if (name === 'excel') {
-    renderClock(); // updates banner
-    renderPreview();
+  if (name === 'clock') {
+    renderClock();
+    refreshTotals().catch(() => {});
   }
+  if (name === 'monthly') renderMonthly();
   if (name === 'settings') {
+    document.getElementById('client-id-input').value = state.settings.clientId || '';
     document.getElementById('schedule-base-url').value = state.settings.scheduleBaseUrl || '';
+    document.getElementById('geo-enabled').checked = !!state.settings.geoEnabled;
+    document.getElementById('geo-radius').value = state.settings.geoRadius || 150;
     updateUrlExample();
+    updateGeoStatus();
+    updateShortcutUrls();
   }
 }
 
@@ -1578,8 +2058,19 @@ function selectDoctor(name) {
   state.currentDoctor = name;
   saveCurrentDoctor();
   state.shifts = storageGet(STORAGE_KEYS.shifts(name), []);
-  showView('clock');
-  renderClock();
+  state.cache = storageGet(STORAGE_KEYS.cache(name), { folderId: null, sheets: {} });
+  // Decide next view: if Google not authed, show auth
+  if (!isAuthed()) {
+    if (state.settings.clientId) {
+      showView('auth');
+    } else {
+      showView('settings');
+      toast('まず Client ID を設定してください', 'error');
+    }
+  } else {
+    showView('clock');
+    refreshTotals().catch(() => {});
+  }
 }
 
 function changeDoctor() {
@@ -1587,128 +2078,66 @@ function changeDoctor() {
   renderDoctorSelect();
 }
 
-/* ==================================================
-   Excel input handling
-   ================================================== */
-async function handleExcelUpload(file) {
-  if (!file) return;
-  try {
-    document.getElementById('excel-filename').textContent = file.name;
-    document.getElementById('excel-hint').textContent = '別のファイルを選ぶ';
-    state.excelFile = file;
-
-    const meta = await loadExcelMeta(file);
-    state.excelMeta = meta;
-    const info = document.getElementById('excel-info');
-    if (meta.sheets.length === 0) {
-      info.innerHTML = '<span class="info-pill error">時間外シートが見つかりません</span>';
-      return;
-    }
-    info.innerHTML = meta.sheets.map(s =>
-      `<span class="info-pill success">${s.name} (${s.year}/${pad(s.month)})</span>`
-    ).join('');
-
-    // Try auto-fetch schedule for the first month
-    if (state.settings.scheduleBaseUrl && !state.scheduleData) {
-      const first = meta.sheets[0];
-      try {
-        await loadScheduleFromUrl(first.year, first.month);
-      } catch (e) {
-        console.warn('Auto-fetch failed:', e);
-      }
-    }
-    renderPreview();
-  } catch (e) {
-    console.error(e);
-    toast('エクセル読み込みに失敗: ' + e.message, 'error');
-  }
-}
-
-async function loadScheduleFromUrl(year, month) {
-  try {
-    setSchedulePill('取得中…', '');
-    const data = await fetchScheduleFromUrl(year, month);
-    state.scheduleData = data;
-    state.scheduleSource = 'url';
-    setSchedulePill(`${data.year}年${data.month}月 (URL)`, 'success');
-    renderPreview();
-  } catch (e) {
-    setSchedulePill('取得失敗', 'error');
-    toast(e.message, 'error');
-    throw e;
-  }
-}
-
-function setSchedulePill(text, kind) {
-  const p = document.getElementById('schedule-pill');
-  p.className = 'info-pill ' + (kind || '');
-  p.textContent = text;
-}
-
-async function handleScheduleFile(file) {
-  if (!file) return;
-  try {
-    const text = await file.text();
-    const data = JSON.parse(text);
-    if (!data.days || !data.year || !data.month) throw new Error('JSON形式が不正です');
-    state.scheduleData = data;
-    state.scheduleSource = 'file';
-    setSchedulePill(`${data.year}年${data.month}月 (ファイル)`, 'success');
-    renderPreview();
-    toast('勤務表を読み込みました', 'success');
-  } catch (e) {
-    toast('読込失敗: ' + e.message, 'error');
-  }
-}
-
-function pasteScheduleModal() {
-  showModal(`
-    <h3>勤務表 JSON をペースト</h3>
-    <p class="ink-soft" style="font-size:12px;margin-bottom:10px;">
-      患者受け持ち表アプリの月次JSONをここに貼り付けてください。
-    </p>
-    <textarea id="paste-area" placeholder='{"year":2026,"month":5,"days":{...}}'></textarea>
-    <div class="modal-actions">
-      <button class="btn outline" data-modal-close>キャンセル</button>
-      <button class="btn" id="paste-load">読込</button>
-    </div>
-  `);
-  document.getElementById('paste-load').addEventListener('click', () => {
-    try {
-      const data = JSON.parse(document.getElementById('paste-area').value);
-      if (!data.days || !data.year || !data.month) throw new Error('JSON形式が不正です');
-      state.scheduleData = data;
-      state.scheduleSource = 'paste';
-      setSchedulePill(`${data.year}年${data.month}月 (ペースト)`, 'success');
-      closeModal();
-      renderPreview();
-      toast('勤務表を読み込みました', 'success');
-    } catch (e) {
-      toast('JSON解析失敗: ' + e.message, 'error');
-    }
-  });
-}
-
-/* ==================================================
-   Settings
-   ================================================== */
+/* ================================================== Settings actions ================================================== */
 function updateUrlExample() {
   const base = (document.getElementById('schedule-base-url').value || state.settings.scheduleBaseUrl || '').trim();
-  const ex = base ? (base.endsWith('/') ? base : base + '/') + 'month_2026-05.json' : '(URL未入力)';
+  const ex = base ? (base.endsWith('/') ? base : base + '/') + 'month_2026-05.json' : '(未設定)';
   document.getElementById('url-example').textContent = ex;
 }
 
+function handleSaveClientId() {
+  state.settings.clientId = document.getElementById('client-id-input').value.trim();
+  saveSettings();
+  // Reset token client to use new ID
+  state.auth.tokenClient = null;
+  state.auth.accessToken = null;
+  state.auth.expiresAt = 0;
+  toast('保存しました。再度サインインしてください', 'success');
+  setSyncStatus('offline');
+}
+
+function handleSaveScheduleUrl() {
+  state.settings.scheduleBaseUrl = document.getElementById('schedule-base-url').value.trim();
+  saveSettings();
+  state.scheduleCache = {};
+  toast('保存しました', 'success');
+  updateUrlExample();
+}
+
+/* ================================================== Auth flow ================================================== */
+async function startSignIn() {
+  if (!state.settings.clientId) {
+    toast('Client ID が未設定です。設定タブで入力してください', 'error');
+    showView('settings');
+    return;
+  }
+  try {
+    setSyncStatus('busy', 'サインイン中…');
+    await requestToken('consent');
+    setSyncStatus('ok');
+    toast('Google にサインインしました', 'success');
+    // Try to set up folder lazily; just navigate to clock
+    showView('clock');
+    refreshTotals().catch(() => {});
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('warn');
+    toast('サインインに失敗: ' + e.message, 'error');
+  }
+}
+
+/* ================================================== Data export/import ================================================== */
 function exportData() {
   const all = {};
   for (const d of DOCTORS) {
-    const k = STORAGE_KEYS.shifts(d);
-    const v = localStorage.getItem(k);
-    if (v) all[d] = JSON.parse(v);
+    const s = localStorage.getItem(STORAGE_KEYS.shifts(d));
+    const c = localStorage.getItem(STORAGE_KEYS.cache(d));
+    if (s || c) all[d] = { shifts: s ? JSON.parse(s) : [], cache: c ? JSON.parse(c) : {} };
   }
   const payload = {
     exported_at: new Date().toISOString(),
     settings: state.settings,
-    shifts_by_doctor: all,
+    by_doctor: all,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
@@ -1723,131 +2152,448 @@ async function importData(file) {
   try {
     const text = await file.text();
     const data = JSON.parse(text);
-    if (data.settings) {
-      state.settings = data.settings;
-      saveSettings();
-    }
-    if (data.shifts_by_doctor) {
-      for (const [doc, shifts] of Object.entries(data.shifts_by_doctor)) {
-        storageSet(STORAGE_KEYS.shifts(doc), shifts);
+    if (data.settings) { state.settings = { ...state.settings, ...data.settings }; saveSettings(); }
+    if (data.by_doctor) {
+      for (const [doc, val] of Object.entries(data.by_doctor)) {
+        if (val.shifts) storageSet(STORAGE_KEYS.shifts(doc), val.shifts);
+        if (val.cache) storageSet(STORAGE_KEYS.cache(doc), val.cache);
       }
-      // reload current doctor
       if (state.currentDoctor) {
         state.shifts = storageGet(STORAGE_KEYS.shifts(state.currentDoctor), []);
+        state.cache = storageGet(STORAGE_KEYS.cache(state.currentDoctor), { folderId: null, sheets: {} });
       }
     }
     toast('インポートしました', 'success');
     renderClock();
-  } catch (e) {
-    toast('インポート失敗: ' + e.message, 'error');
-  }
+  } catch (e) { toast('インポート失敗: ' + e.message, 'error'); }
 }
 
 function clearAllData() {
   if (!confirm('全ての打刻履歴と設定を削除します。よろしいですか?')) return;
-  if (!confirm('本当に削除します。元に戻せません。')) return;
-  for (const d of DOCTORS) localStorage.removeItem(STORAGE_KEYS.shifts(d));
+  if (!confirm('本当に削除します。元に戻せません。Driveのスプレッドシートは残ります。')) return;
+  for (const d of DOCTORS) {
+    localStorage.removeItem(STORAGE_KEYS.shifts(d));
+    localStorage.removeItem(STORAGE_KEYS.cache(d));
+  }
   localStorage.removeItem(STORAGE_KEYS.settings);
   localStorage.removeItem(STORAGE_KEYS.doctor);
   state.currentDoctor = null;
   state.shifts = [];
-  state.settings = { scheduleBaseUrl: '' };
-  toast('全データを削除しました', 'success');
+  state.cache = { folderId: null, sheets: {} };
+  state.settings = { scheduleBaseUrl: DEFAULT_SCHEDULE_URL, clientId: DEFAULT_CLIENT_ID };
+  signOut();
+  toast('削除しました', 'success');
   changeDoctor();
 }
 
-/* ==================================================
-   Init
-   ================================================== */
-function bindEvents() {
-  // Clock toggle
-  document.getElementById('clock-toggle').addEventListener('click', () => {
-    if (getOpenShift()) clockOut(); else clockIn();
-  });
+/* ================================================== Geolocation ================================================== */
+function haversineMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
 
-  // Bottom nav
+function getCurrentPosition(timeout = 8000) {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('位置情報が利用できません'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(pos),
+      (err) => reject(new Error('位置情報取得失敗: ' + err.message)),
+      { enableHighAccuracy: false, timeout, maximumAge: 60000 }
+    );
+  });
+}
+
+async function checkGeoProximity() {
+  // Returns 'near' | 'far' | 'unknown'
+  if (!state.settings.geoEnabled || !state.settings.hospitalLat) return 'unknown';
+  try {
+    const pos = await getCurrentPosition();
+    const dist = haversineMeters(
+      pos.coords.latitude, pos.coords.longitude,
+      state.settings.hospitalLat, state.settings.hospitalLng
+    );
+    const r = Number(state.settings.geoRadius) || 150;
+    if (dist <= r) return 'near';
+    if (dist > r * 3) return 'far';
+    return 'unknown';
+  } catch (e) {
+    console.warn('geo:', e);
+    return 'unknown';
+  }
+}
+
+async function maybeShowGeoPrompt() {
+  if (!state.settings.geoEnabled || !state.settings.hospitalLat) return;
+  // Only prompt once per session
+  if (sessionStorage.getItem('geo_prompted') === '1') return;
+  // Don't prompt if document is hidden (background tab)
+  if (document.hidden) return;
+
+  const proximity = await checkGeoProximity();
+  const isOpen = !!getOpenShift();
+
+  if (proximity === 'near' && !isOpen) {
+    sessionStorage.setItem('geo_prompted', '1');
+    showGeoPrompt('in');
+  } else if (proximity === 'far' && isOpen) {
+    // Only suggest clock-out if shift has been at least 4 hours (avoid premature prompts)
+    const open = getOpenShift();
+    const hours = (Date.now() - new Date(open.clockIn).getTime()) / 3600000;
+    if (hours >= 4) {
+      sessionStorage.setItem('geo_prompted', '1');
+      showGeoPrompt('out');
+    }
+  }
+}
+
+function showGeoPrompt(direction) {
+  const isIn = direction === 'in';
+  const html = `
+    <div class="geo-modal-card ${direction}">
+      <div class="glyph">${isIn ? '◉' : '○'}</div>
+      <div class="geo-msg">${isIn ? '病院付近にいます。出勤しますか?' : '病院から離れています。退勤しますか?'}</div>
+      <div class="geo-sub">${isIn ? '勤務時間が記録されます' : '勤務時間が確定されます'}</div>
+      <div class="modal-actions">
+        <button class="btn outline" data-modal-close>後で</button>
+        <button class="btn ${isIn ? '' : 'danger'}" id="geo-confirm">${isIn ? '出勤する' : '退勤する'}</button>
+      </div>
+    </div>
+  `;
+  showModal(html);
+  document.getElementById('geo-confirm').addEventListener('click', async () => {
+    closeModal();
+    if (isIn) await clockInAction(); else await clockOutAction();
+  });
+}
+
+async function registerHospitalLocation() {
+  toast('現在地を取得中…', '');
+  try {
+    const pos = await getCurrentPosition(15000);
+    state.settings.hospitalLat = pos.coords.latitude;
+    state.settings.hospitalLng = pos.coords.longitude;
+    saveSettings();
+    updateGeoStatus();
+    toast(`登録完了 (精度 ±${Math.round(pos.coords.accuracy)}m)`, 'success');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function clearHospitalLocation() {
+  state.settings.hospitalLat = null;
+  state.settings.hospitalLng = null;
+  saveSettings();
+  updateGeoStatus();
+  toast('登録を解除しました', 'success');
+}
+
+function updateGeoStatus() {
+  const el = document.getElementById('geo-status');
+  if (!el) return;
+  if (state.settings.hospitalLat) {
+    const lat = state.settings.hospitalLat.toFixed(5);
+    const lng = state.settings.hospitalLng.toFixed(5);
+    el.innerHTML = `病院位置: <span class="mono">${lat}, ${lng}</span>`;
+  } else {
+    el.textContent = '病院位置: 未登録';
+  }
+}
+
+/* ================================================== URL parameter / auto-action ================================================== */
+function parseUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    auto: params.get('auto'),       // 'in' | 'out' | 'toggle'
+    doctor: params.get('doctor'),   // optional override
+    close: params.get('close') === 'true',
+  };
+}
+
+function clearUrlParams() {
+  // Remove ?auto=... params from address bar so refresh doesn't re-trigger
+  const url = window.location.pathname + window.location.hash;
+  history.replaceState({}, '', url);
+}
+
+function showAutoSplash(state, opts = {}) {
+  // state: 'processing' | 'in_success' | 'out_success' | 'error'
+  const splash = document.getElementById('auto-splash');
+  splash.style.display = 'flex';
+  splash.className = 'auto-splash';
+  let html = '';
+  if (state === 'processing') {
+    html = `
+      <div class="glyph-big" style="color:var(--ink-mute);">時</div>
+      <div class="auto-status">処理中</div>
+      <div class="auto-sub"><span class="spinner"></span> 打刻を記録しています…</div>
+    `;
+  } else if (state === 'in_success') {
+    splash.classList.add('in');
+    html = `
+      <div class="glyph-big">出</div>
+      <div class="auto-status">出勤しました</div>
+      <div class="auto-time">${opts.time || ''}</div>
+      <div class="auto-doctor">${opts.doctor || ''}　${opts.date || ''}</div>
+      <div class="auto-sub">${opts.synced ? '✓ スプレッドシートに同期済み' : '⌛ ローカルに保存しました (後で同期)'}</div>
+      <div class="auto-actions">
+        <button class="btn outline" data-action="splash-close">閉じる</button>
+        <button class="btn" data-action="splash-open-app">アプリを開く</button>
+      </div>
+    `;
+  } else if (state === 'out_success') {
+    splash.classList.add('out');
+    html = `
+      <div class="glyph-big">退</div>
+      <div class="auto-status">退勤しました</div>
+      <div class="auto-time">${opts.time || ''}</div>
+      <div class="auto-doctor">${opts.doctor || ''}　勤務時間 ${opts.duration || ''}</div>
+      <div class="auto-sub">${opts.synced ? '✓ スプレッドシートに同期済み' : '⌛ ローカルに保存しました (後で同期)'}<br>${opts.totalSoFar ? '今月の合計: <span class="mono">' + opts.totalSoFar + '</span>' : ''}</div>
+      <div class="auto-actions">
+        <button class="btn outline" data-action="splash-close">閉じる</button>
+        <button class="btn" data-action="splash-open-app">アプリを開く</button>
+      </div>
+    `;
+  } else if (state === 'error') {
+    splash.classList.add('error');
+    html = `
+      <div class="glyph-big">!</div>
+      <div class="auto-status">エラー</div>
+      <div class="auto-sub">${opts.message || '処理に失敗しました'}</div>
+      <div class="auto-actions">
+        <button class="btn" data-action="splash-open-app">アプリを開く</button>
+      </div>
+    `;
+  }
+  splash.innerHTML = html;
+}
+
+function hideAutoSplash() {
+  const splash = document.getElementById('auto-splash');
+  splash.style.display = 'none';
+}
+
+async function handleAutoAction(autoParam, doctorParam) {
+  // Determine doctor
+  let doctor = doctorParam || state.currentDoctor;
+  if (doctorParam && DOCTORS.includes(doctorParam)) {
+    doctor = doctorParam;
+    state.currentDoctor = doctor;
+    saveCurrentDoctor();
+    state.shifts = storageGet(STORAGE_KEYS.shifts(doctor), []);
+    state.cache = storageGet(STORAGE_KEYS.cache(doctor), { folderId: null, sheets: {} });
+  }
+  if (!doctor) {
+    showAutoSplash('error', { message: '医師が選択されていません。先にアプリで医師を選択してください。' });
+    return;
+  }
+
+  // Decide action
+  const open = getOpenShift();
+  let action;
+  if (autoParam === 'toggle') {
+    // Debounce: ignore if last action was within 1 minute
+    if (open) {
+      const sinceIn = (Date.now() - new Date(open.clockIn).getTime()) / 1000;
+      if (sinceIn < 60) {
+        showAutoSplash('error', { message: `${Math.round(sinceIn)}秒前に出勤したばかりです。誤操作防止のため処理しません。` });
+        return;
+      }
+      action = 'out';
+    } else {
+      // Check most recent shift's clockOut
+      const lastShift = [...state.shifts].sort((a, b) => new Date(b.clockOut || b.clockIn) - new Date(a.clockOut || a.clockIn))[0];
+      if (lastShift?.clockOut) {
+        const sinceOut = (Date.now() - new Date(lastShift.clockOut).getTime()) / 1000;
+        if (sinceOut < 60) {
+          showAutoSplash('error', { message: `${Math.round(sinceOut)}秒前に退勤したばかりです。誤操作防止のため処理しません。` });
+          return;
+        }
+      }
+      action = 'in';
+    }
+  } else if (autoParam === 'in') {
+    if (open) {
+      showAutoSplash('error', { message: '既に出勤中です。退勤を行ってください。' });
+      return;
+    }
+    action = 'in';
+  } else if (autoParam === 'out') {
+    if (!open) {
+      showAutoSplash('error', { message: '出勤記録がありません。先に出勤してください。' });
+      return;
+    }
+    action = 'out';
+  } else {
+    showAutoSplash('error', { message: '不明なパラメータです: ' + autoParam });
+    return;
+  }
+
+  showAutoSplash('processing');
+
+  // Execute action (record locally first, sync best-effort)
+  const now = new Date();
+  let session;
+  let synced = false;
+
+  if (action === 'in') {
+    session = {
+      id: 'sh_' + Date.now(),
+      clockIn: now.toISOString(),
+      clockOut: null,
+      syncedSheetIds: [],
+    };
+    state.shifts.push(session);
+    saveShifts();
+
+    if (state.settings.clientId) {
+      try {
+        await requestToken('');  // try silent
+        await syncClockIn(session);
+        synced = true;
+      } catch (e) {
+        console.warn('silent sync failed:', e);
+      }
+    }
+
+    showAutoSplash('in_success', {
+      time: formatTime(now),
+      doctor,
+      date: `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} (${formatWeekday(now)})`,
+      synced,
+    });
+  } else {
+    session = open;
+    session.clockOut = now.toISOString();
+    saveShifts();
+
+    if (state.settings.clientId) {
+      try {
+        await requestToken('');
+        await syncClockOut(session);
+        synced = true;
+      } catch (e) {
+        console.warn('silent sync failed:', e);
+      }
+    }
+
+    // Compute duration
+    const ms = new Date(session.clockOut) - new Date(session.clockIn);
+    const totalMin = Math.round(ms / 60000);
+    const dur = `${Math.floor(totalMin/60)}時間${totalMin%60}分`;
+
+    // Try to read updated total
+    let totalSoFar = '';
+    if (synced) {
+      try {
+        const y = now.getFullYear();
+        const m = now.getMonth() + 1;
+        const sid = state.cache.sheets[ymKey(y, m)];
+        if (sid) totalSoFar = await readMonthTotal(sid);
+      } catch {}
+    }
+
+    showAutoSplash('out_success', {
+      time: formatTime(now),
+      doctor,
+      duration: dur,
+      synced,
+      totalSoFar,
+    });
+  }
+}
+
+/* ================================================== Settings: shortcut URL display ================================================== */
+function updateShortcutUrls() {
+  const base = window.location.origin + window.location.pathname;
+  const doc = state.currentDoctor || '';
+  const docParam = doc ? `&doctor=${encodeURIComponent(doc)}` : '';
+  const set = (id, url) => { const el = document.getElementById(id); if (el) el.value = url; };
+  set('shortcut-toggle', `${base}?auto=toggle${docParam}`);
+  set('shortcut-in',     `${base}?auto=in${docParam}`);
+  set('shortcut-out',    `${base}?auto=out${docParam}`);
+}
+
+function copyShortcutUrl(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.select();
+  input.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(input.value).then(
+    () => toast('コピーしました', 'success'),
+    () => toast('コピー失敗 (手動でコピーしてください)', 'error')
+  );
+}
+
+
+function bindEvents() {
+  document.getElementById('clock-toggle').addEventListener('click', () => {
+    if (getOpenShift()) clockOutAction(); else clockInAction();
+  });
   document.getElementById('bottom-nav').addEventListener('click', (e) => {
     const v = e.target.closest('button')?.dataset.view;
     if (v) showView(v);
   });
-
-  // Action delegation
   document.body.addEventListener('click', (e) => {
     const a = e.target.closest('[data-action]')?.dataset.action;
     if (!a) return;
     switch (a) {
-      case 'change-doctor':   changeDoctor(); break;
-      case 'add-manual':      openShiftEditor(null, true); break;
-      case 'show-all-shifts': showAllShifts(); break;
-      case 'fetch-schedule':  promptFetchSchedule(); break;
-      case 'paste-schedule':  pasteScheduleModal(); break;
-      case 'save-settings':   handleSaveSettings(); break;
-      case 'export-data':     exportData(); break;
-      case 'import-data':     document.getElementById('import-file').click(); break;
-      case 'clear-data':      clearAllData(); break;
+      case 'change-doctor':       changeDoctor(); break;
+      case 'add-manual':          openShiftEditor(null, true); break;
+      case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
+      case 'signin':              startSignIn(); break;
+      case 'signout':             signOut(); break;
+      case 'save-client-id':      handleSaveClientId(); break;
+      case 'save-schedule-url':   handleSaveScheduleUrl(); break;
+      case 'export-data':         exportData(); break;
+      case 'import-data':         document.getElementById('import-file').click(); break;
+      case 'clear-data':          clearAllData(); break;
+      case 'refresh-monthly':     renderMonthly(); break;
+      case 'register-hospital-loc': registerHospitalLocation(); break;
+      case 'clear-hospital-loc':  clearHospitalLocation(); break;
+      case 'copy-url': {
+        const id = e.target.closest('[data-action]').dataset.urlId;
+        copyShortcutUrl(id);
+        break;
+      }
+      case 'splash-close':        try { window.close(); } catch {} hideAutoSplash(); break;
+      case 'splash-open-app':     hideAutoSplash(); showView('clock'); refreshTotals().catch(() => {}); break;
     }
   });
-
-  // Excel upload
-  document.getElementById('excel-input').addEventListener('change', (e) => {
-    handleExcelUpload(e.target.files[0]);
-  });
-
-  // Schedule file
-  document.getElementById('schedule-file').addEventListener('change', (e) => {
-    handleScheduleFile(e.target.files[0]);
-  });
-
-  // Settings url example update
   document.getElementById('schedule-base-url').addEventListener('input', updateUrlExample);
-
-  // Generate button
-  document.getElementById('generate-btn').addEventListener('click', async () => {
-    const btn = document.getElementById('generate-btn');
-    btn.disabled = true;
-    btn.textContent = '生成中…';
-    try {
-      await generateExcel();
-    } catch (e) {
-      console.error(e);
-      toast('生成失敗: ' + e.message, 'error');
-    } finally {
-      btn.disabled = false;
-      btn.textContent = '生成してダウンロード';
-    }
-  });
-
-  // Import file
   document.getElementById('import-file').addEventListener('change', (e) => {
     if (e.target.files[0]) importData(e.target.files[0]);
   });
-
-  // Modal backdrop click
   document.getElementById('modal').addEventListener('click', (e) => {
     if (e.target.id === 'modal') closeModal();
   });
-}
-
-function promptFetchSchedule() {
-  if (!state.excelMeta || state.excelMeta.sheets.length === 0) {
-    toast('先にエクセルをアップロードしてください', 'error');
-    return;
-  }
-  if (!state.settings.scheduleBaseUrl) {
-    toast('設定でベースURLを入力してください', 'error');
-    showView('settings');
-    return;
-  }
-  // Use first sheet's year/month
-  const s = state.excelMeta.sheets[0];
-  loadScheduleFromUrl(s.year, s.month).catch(() => {});
-}
-
-function handleSaveSettings() {
-  state.settings.scheduleBaseUrl = document.getElementById('schedule-base-url').value.trim();
-  saveSettings();
-  updateUrlExample();
-  toast('保存しました', 'success');
+  // Geolocation settings auto-save
+  document.getElementById('geo-enabled').addEventListener('change', (e) => {
+    state.settings.geoEnabled = e.target.checked;
+    saveSettings();
+    if (e.target.checked && !state.settings.hospitalLat) {
+      toast('「現在地を病院として登録」を病院内で押してください', '');
+    }
+  });
+  document.getElementById('geo-radius').addEventListener('change', (e) => {
+    const v = parseInt(e.target.value);
+    state.settings.geoRadius = (isNaN(v) || v < 30) ? 150 : Math.min(v, 2000);
+    e.target.value = state.settings.geoRadius;
+    saveSettings();
+  });
+  // Re-check geolocation when tab becomes visible again
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.currentView === 'clock') {
+      maybeShowGeoPrompt().catch(() => {});
+    }
+  });
 }
 
 function init() {
@@ -1855,24 +2601,67 @@ function init() {
   loadDoctorState();
   bindEvents();
   renderDoctorSelect();
+  setSyncStatus('offline');
 
+  // ===== Check for auto-action URL params first =====
+  const params = parseUrlParams();
+  if (params.auto) {
+    clearUrlParams();  // remove from URL so refresh doesn't re-trigger
+    // Wait for GIS lib to load (best effort), then run auto-action
+    const runAuto = () => handleAutoAction(params.auto, params.doctor).catch(e => {
+      console.error('auto action error:', e);
+      showAutoSplash('error', { message: e.message });
+    });
+    if (state.settings.clientId) {
+      // Give GIS up to 2s to load, then proceed regardless
+      let elapsed = 0;
+      const tick = () => {
+        if (gisReady() || elapsed > 2000) runAuto();
+        else { elapsed += 150; setTimeout(tick, 150); }
+      };
+      tick();
+    } else {
+      runAuto();
+    }
+    return;
+  }
+
+  // ===== Normal flow =====
   if (state.currentDoctor) {
-    showView('clock');
+    if (state.settings.clientId) {
+      const tryInit = () => {
+        if (gisReady()) {
+          requestToken('').then(() => {
+            setSyncStatus('ok');
+            showView('clock');
+            refreshTotals().catch(() => {});
+            // Geo prompt after a short delay
+            setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
+          }).catch(() => {
+            showView('auth');
+          });
+        } else {
+          setTimeout(tryInit, 200);
+        }
+      };
+      tryInit();
+    } else {
+      showView('settings');
+    }
   } else {
     showView('select');
   }
 
-  // Update clock display every second
   setInterval(() => {
     if (state.currentView === 'clock') {
       const now = new Date();
-      document.getElementById('now-time').textContent = formatTime(now);
+      const t = document.getElementById('now-time');
+      if (t) t.textContent = formatTime(now);
     }
   }, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', init);
 </script>
-
 </body>
 </html>
