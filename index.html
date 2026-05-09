@@ -1118,11 +1118,6 @@
       </div>
 
       <div class="limit-warning" id="limit-warning" style="display:none;"></div>
-
-      <div class="sheet-link-row" id="sheet-link-row" style="display:none;">
-        <a class="sheet-link" id="sheet-link-app" href="#"><span>📱 アプリで開く</span><span class="arrow">→</span></a>
-        <a class="sheet-link" id="sheet-link-browser" href="#" target="_blank" rel="noopener"><span>🌐 ブラウザで開く</span><span class="arrow">→</span></a>
-      </div>
     </div>
 
     <details class="section">
@@ -2190,9 +2185,6 @@ function renderStats(stats, year, month) {
   const remainEl  = document.getElementById('stat-remaining');
   const plannedEl = document.getElementById('stat-planned');
   const remainWrap = document.getElementById('stat-remaining-wrap');
-  const linkRow = document.getElementById('sheet-link-row');
-  const linkApp = document.getElementById('sheet-link-app');
-  const linkBrowser = document.getElementById('sheet-link-browser');
   const warnEl = document.getElementById('limit-warning');
 
   monthEl.textContent = `${month}月`;
@@ -2203,7 +2195,6 @@ function renderStats(stats, year, month) {
     totalEl.textContent = '--:--';
     remainEl.textContent = '--:--';
     plannedEl.innerHTML = `予定 --h <span class="edit-icon">✎ タップして設定</span>`;
-    linkRow.style.display = 'none';
     return;
   }
 
@@ -2232,19 +2223,6 @@ function renderStats(stats, year, month) {
       remainEl.textContent = hoursToHM(stats.remainingHours);
     }
   }
-
-  const urls = buildSheetUrls(state.currentMonthSid);
-  linkApp.href = urls.appUrl;
-  linkBrowser.href = urls.browserUrl;
-  // On desktop the "アプリで開く" button is meaningless — hide it
-  if (!isMobile()) {
-    linkApp.style.display = 'none';
-    linkRow.style.gridTemplateColumns = '1fr';
-  } else {
-    linkApp.style.display = '';
-    linkRow.style.gridTemplateColumns = '';
-  }
-  linkRow.style.display = '';
 }
 
 /* ================================================== Today's planned shift display ================================================== */
