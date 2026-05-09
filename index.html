@@ -305,6 +305,24 @@
   }
   .stat.warn .stat-value { color: var(--terracotta); }
   .stat.danger .stat-value { color: var(--terracotta); font-weight: 700; }
+  .stat.clickable {
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .stat.clickable:hover {
+    background: var(--paper-soft);
+    border-color: var(--ink-soft);
+  }
+  .stat.clickable:active {
+    transform: scale(0.99);
+  }
+  .stat.empty .stat-value {
+    color: var(--terracotta);
+    font-size: 14px;
+    font-family: var(--serif);
+    font-weight: 500;
+    letter-spacing: 0.05em;
+  }
   .stat-sub.editable {
     cursor: pointer;
     transition: color 0.15s;
@@ -344,6 +362,53 @@
     font-size: 13px;
     vertical-align: -1px;
     margin-right: 4px;
+  }
+
+  /* Today's planned shift indicator */
+  .today-shift {
+    text-align: center;
+    margin: 14px 0 4px;
+    padding: 10px 14px;
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    font-size: 13px;
+    color: var(--ink-soft);
+    transition: all 0.2s;
+  }
+  .today-shift .shift-prefix {
+    font-size: 11px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+    margin-right: 8px;
+  }
+  .today-shift .shift-type {
+    font-family: var(--serif);
+    font-size: 17px;
+    color: var(--ink);
+    letter-spacing: 0.15em;
+    font-weight: 500;
+  }
+  .today-shift.shift-day  .shift-type { color: var(--moss); }
+  .today-shift.shift-night .shift-type { color: var(--terracotta); }
+  .today-shift.shift-25kin .shift-type { color: var(--gold); }
+  .today-shift.shift-ake  .shift-type { color: var(--gold); }
+  .today-shift.error {
+    border-color: var(--terracotta);
+    color: var(--terracotta);
+    background: rgba(176, 74, 54, 0.05);
+  }
+  .today-shift .reload-btn {
+    background: transparent;
+    border: 1px solid var(--line);
+    color: var(--ink-mute);
+    padding: 2px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 8px;
+  }
+  .today-shift .reload-btn:hover {
+    color: var(--ink);
+    border-color: var(--ink-soft);
   }
 
   /* Limit warning banner */
@@ -910,6 +975,7 @@
           <span class="status-dot" id="status-dot"></span>
           <span class="status-text" id="status-text">勤務外</span>
         </div>
+        <div class="today-shift" id="today-shift" style="display:none;"></div>
       </div>
       <button class="big-btn" id="clock-toggle">出　勤</button>
       <button class="secondary-btn" id="specify-time-btn"><span class="icon">⏰</span>時刻を指定して打刻</button>
@@ -920,10 +986,10 @@
           <div class="stat-value" id="stat-total">--:--</div>
           <div class="stat-sub" id="stat-month">--月</div>
         </div>
-        <div class="stat" id="stat-remaining-wrap">
+        <div class="stat clickable" id="stat-remaining-wrap" data-action="edit-planned">
           <div class="stat-label">80時間まで残り</div>
           <div class="stat-value" id="stat-remaining">--:--</div>
-          <div class="stat-sub editable" id="stat-planned" data-action="edit-planned">予定 --h <span class="edit-icon">✎</span></div>
+          <div class="stat-sub" id="stat-planned">予定 --h <span class="edit-icon">✎</span></div>
         </div>
       </div>
 
@@ -1822,41 +1888,109 @@ function renderStats(stats, year, month) {
   const warnEl = document.getElementById('limit-warning');
 
   monthEl.textContent = `${month}月`;
-  remainWrap.classList.remove('warn', 'danger');
+  remainWrap.classList.remove('warn', 'danger', 'empty');
   warnEl.style.display = 'none';
 
   if (!stats) {
     totalEl.textContent = '--:--';
     remainEl.textContent = '--:--';
-    plannedEl.innerHTML = `予定 --h <span class="edit-icon">✎</span>`;
+    plannedEl.innerHTML = `予定 --h <span class="edit-icon">✎ タップして設定</span>`;
     link.style.display = 'none';
     return;
   }
 
   totalEl.textContent = stats.actualFormatted;
-  plannedEl.innerHTML = `予定 ${stats.planned}h <span class="edit-icon">✎</span>`;
 
-  if (stats.remainingHours < 0) {
-    remainEl.textContent = '超過 ' + hoursToHM(-stats.remainingHours);
-    remainWrap.classList.add('danger');
-    warnEl.style.display = '';
-    warnEl.className = 'limit-warning danger';
-    warnEl.innerHTML = `⚠ 月80時間を <strong>${hoursToHM(-stats.remainingHours)}</strong> 超過しています`;
-  } else if (stats.remainingHours < 10) {
-    remainEl.textContent = hoursToHM(stats.remainingHours);
-    remainWrap.classList.add('warn');
-    warnEl.style.display = '';
-    warnEl.className = 'limit-warning';
-    warnEl.innerHTML = `⚠ 月80時間まで残り <strong>${hoursToHM(stats.remainingHours)}</strong>`;
+  // When planned hours is 0, prompt prominently
+  if (stats.planned === 0) {
+    remainWrap.classList.add('empty');
+    remainEl.textContent = '予定未設定';
+    plannedEl.innerHTML = `<span style="color:var(--terracotta);font-weight:500;">タップして予定時間を入力 ✎</span>`;
   } else {
-    remainEl.textContent = hoursToHM(stats.remainingHours);
+    plannedEl.innerHTML = `予定 ${stats.planned}h <span class="edit-icon">✎ 編集</span>`;
+    if (stats.remainingHours < 0) {
+      remainEl.textContent = '超過 ' + hoursToHM(-stats.remainingHours);
+      remainWrap.classList.add('danger');
+      warnEl.style.display = '';
+      warnEl.className = 'limit-warning danger';
+      warnEl.innerHTML = `⚠ 月80時間を <strong>${hoursToHM(-stats.remainingHours)}</strong> 超過しています`;
+    } else if (stats.remainingHours < 10) {
+      remainEl.textContent = hoursToHM(stats.remainingHours);
+      remainWrap.classList.add('warn');
+      warnEl.style.display = '';
+      warnEl.className = 'limit-warning';
+      warnEl.innerHTML = `⚠ 月80時間まで残り <strong>${hoursToHM(stats.remainingHours)}</strong>`;
+    } else {
+      remainEl.textContent = hoursToHM(stats.remainingHours);
+    }
   }
 
   link.href = `https://docs.google.com/spreadsheets/d/${state.currentMonthSid}/edit`;
   link.style.display = '';
 }
 
-/* ================================================== Clock in/out ================================================== */
+/* ================================================== Today's planned shift display ================================================== */
+async function renderTodayShift() {
+  const el = document.getElementById('today-shift');
+  if (!el) return;
+  el.style.display = '';
+  el.className = 'today-shift';
+  el.innerHTML = '<span class="ink-mute"><span class="spinner"></span> 勤務表を取得中…</span>';
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const dateKey = formatDateKey(now);
+
+  try {
+    const sched = await fetchSchedule(year, month);
+    const shift = shiftFromSchedule(now, state.currentDoctor, sched);
+    const shiftClass = {
+      '日勤':  'shift-day',
+      '夜勤':  'shift-night',
+      '25勤':  'shift-25kin',
+      '明':    'shift-ake',
+      '休':    '',
+      '出張':  '',
+    }[shift] || '';
+    if (shiftClass) el.classList.add(shiftClass);
+
+    if (shift) {
+      el.innerHTML = `
+        <span class="shift-prefix">本日の勤務</span>
+        <span class="shift-type">${shift}</span>
+        <button class="reload-btn" data-action="reload-today-shift" title="再取得">⟳</button>
+      `;
+    } else {
+      // Schedule fetched OK but no entry for this doctor today
+      const day = sched?.days?.[dateKey];
+      if (!day) {
+        el.innerHTML = `
+          <span class="shift-prefix">本日の勤務予定</span>
+          <span style="color:var(--ink-mute);">登録なし</span>
+          <span style="font-size:10px;color:var(--ink-mute);">　(${dateKey}のデータが勤務表に存在しません)</span>
+          <button class="reload-btn" data-action="reload-today-shift">⟳</button>
+        `;
+      } else {
+        el.innerHTML = `
+          <span class="shift-prefix">本日の勤務予定</span>
+          <span style="color:var(--ink-mute);">登録なし</span>
+          <span style="font-size:10px;color:var(--ink-mute);">　(${state.currentDoctor}は${dateKey}に勤務予定なし)</span>
+          <button class="reload-btn" data-action="reload-today-shift">⟳</button>
+        `;
+      }
+    }
+  } catch (e) {
+    el.classList.add('error');
+    el.innerHTML = `
+      <span style="font-size:11px;">⚠ 勤務表取得失敗: ${e.message}</span>
+      <button class="reload-btn" data-action="reload-today-shift">⟳ 再取得</button>
+    `;
+    console.warn('renderTodayShift error:', e);
+  }
+}
+
+
 function getOpenShift() { return state.shifts.find(s => s.clockIn && !s.clockOut) || null; }
 
 async function clockInAction() {
@@ -1964,16 +2098,18 @@ function renderClock() {
   const btn = document.getElementById('clock-toggle');
   const dot = document.getElementById('status-dot');
   const txt = document.getElementById('status-text');
+  const strip = document.querySelector('.status-strip');
   if (open) {
     btn.textContent = '退　勤';
     btn.className = 'big-btn clock-out';
+    if (strip) strip.style.display = '';
     dot.classList.add('active');
     txt.innerHTML = `勤務中　<strong>${formatDateTimeFull(new Date(open.clockIn))}</strong> 〜`;
   } else {
     btn.textContent = '出　勤';
     btn.className = 'big-btn';
+    if (strip) strip.style.display = 'none';
     dot.classList.remove('active');
-    txt.textContent = '勤務外';
   }
   const specifyBtn = document.getElementById('specify-time-btn');
   if (specifyBtn) {
@@ -2170,6 +2306,7 @@ function showView(name) {
   if (name === 'clock') {
     renderClock();
     refreshTotals().catch(() => {});
+    renderTodayShift().catch(() => {});
   }
   if (name === 'monthly') renderMonthly();
   if (name === 'settings') {
@@ -2213,7 +2350,22 @@ async function openPlannedHoursEditor() {
   const month = now.getMonth() + 1;
 
   if (!isAuthed()) {
-    toast('Google にサインインしてください', 'error');
+    showModal(`
+      <h3>Google サインインが必要です</h3>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        予定時間外をスプレッドシートに保存するため、Google にサインインしてください。
+      </p>
+      <div class="modal-actions">
+        <button class="btn outline" data-modal-close>キャンセル</button>
+        <button class="btn" id="modal-signin">サインイン</button>
+      </div>
+    `);
+    document.getElementById('modal-signin').addEventListener('click', async () => {
+      closeModal();
+      await startSignIn();
+      // After successful sign-in, re-open the editor
+      if (isAuthed()) setTimeout(() => openPlannedHoursEditor(), 200);
+    });
     return;
   }
 
@@ -2227,7 +2379,7 @@ async function openPlannedHoursEditor() {
     </p>
     <div class="field">
       <label>予定時間外 (時間)</label>
-      <input type="text" id="planned-input" inputmode="decimal" value="${currentValue}">
+      <input type="text" id="planned-input" inputmode="decimal" value="${currentValue}" autofocus>
       <p class="ink-mute" style="font-size:11px;margin-top:6px;">0〜80の数値 (小数可)</p>
     </div>
     <div class="modal-actions">
@@ -2235,6 +2387,15 @@ async function openPlannedHoursEditor() {
       <button class="btn" id="planned-save">保存</button>
     </div>
   `);
+
+  // Auto-focus and select content for easy editing
+  const input = document.getElementById('planned-input');
+  setTimeout(() => { input.focus(); input.select(); }, 100);
+
+  // Allow Enter to save
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('planned-save').click();
+  });
 
   document.getElementById('planned-save').addEventListener('click', async () => {
     const v = parseFloat(document.getElementById('planned-input').value);
@@ -2727,6 +2888,7 @@ function bindEvents() {
       case 'change-doctor':       changeDoctor(); break;
       case 'add-manual':          openShiftEditor(null, true); break;
       case 'edit-planned':        openPlannedHoursEditor(); break;
+      case 'reload-today-shift':  state.scheduleCache = {}; renderTodayShift().catch(() => {}); break;
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
       case 'signout':             signOut(); break;
