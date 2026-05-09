@@ -304,6 +304,64 @@
     margin-top: 3px;
   }
   .stat.warn .stat-value { color: var(--terracotta); }
+  .stat.danger .stat-value { color: var(--terracotta); font-weight: 700; }
+  .stat-sub.editable {
+    cursor: pointer;
+    transition: color 0.15s;
+    user-select: none;
+  }
+  .stat-sub.editable:hover {
+    color: var(--ink);
+  }
+  .stat-sub.editable .edit-icon {
+    margin-left: 4px;
+    color: var(--ink-mute);
+    font-size: 10px;
+  }
+
+  /* Secondary action button below big clock button */
+  .secondary-btn {
+    display: block;
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px 14px;
+    font-family: var(--sans);
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    background: transparent;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+  .secondary-btn:hover {
+    background: var(--paper-soft);
+    border-color: var(--ink-soft);
+    color: var(--ink);
+  }
+  .secondary-btn .icon {
+    font-size: 13px;
+    vertical-align: -1px;
+    margin-right: 4px;
+  }
+
+  /* Limit warning banner */
+  .limit-warning {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(176, 74, 54, 0.08);
+    border: 1px solid var(--terracotta);
+    color: var(--terracotta);
+    font-size: 12px;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .limit-warning.danger {
+    background: var(--terracotta);
+    color: var(--paper);
+    font-weight: 500;
+  }
 
   .sheet-link {
     display: flex;
@@ -854,6 +912,7 @@
         </div>
       </div>
       <button class="big-btn" id="clock-toggle">出　勤</button>
+      <button class="secondary-btn" id="specify-time-btn"><span class="icon">⏰</span>時刻を指定して打刻</button>
 
       <div class="stats-row">
         <div class="stat">
@@ -864,9 +923,11 @@
         <div class="stat" id="stat-remaining-wrap">
           <div class="stat-label">80時間まで残り</div>
           <div class="stat-value" id="stat-remaining">--:--</div>
-          <div class="stat-sub" id="stat-planned">予定 --h</div>
+          <div class="stat-sub editable" id="stat-planned" data-action="edit-planned">予定 --h <span class="edit-icon">✎</span></div>
         </div>
       </div>
+
+      <div class="limit-warning" id="limit-warning" style="display:none;"></div>
 
       <a class="sheet-link" id="sheet-link" href="#" target="_blank" rel="noopener" style="display:none;">
         <span>📊 今月のスプレッドシートを開く</span>
@@ -994,33 +1055,37 @@
 
     <div class="card">
       <h2 class="section-title">ルール</h2>
-      <table style="width:100%;font-size:12px;border-collapse:collapse;">
+      <table style="width:100%;font-size:11px;border-collapse:collapse;">
         <thead>
           <tr style="background:var(--paper-soft);">
-            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">項目</th>
-            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">日勤</th>
-            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">夜勤・25勤</th>
-            <th style="padding:6px;text-align:left;border:1px solid var(--line-soft);">明</th>
+            <th style="padding:5px;text-align:left;border:1px solid var(--line-soft);">項目</th>
+            <th style="padding:5px;text-align:left;border:1px solid var(--line-soft);">日勤</th>
+            <th style="padding:5px;text-align:left;border:1px solid var(--line-soft);">夜勤</th>
+            <th style="padding:5px;text-align:left;border:1px solid var(--line-soft);">25勤</th>
+            <th style="padding:5px;text-align:left;border:1px solid var(--line-soft);">明</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td style="padding:6px;border:1px solid var(--line-soft);">勤務開始前</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">出勤〜8:30 (max 30分)</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">出勤〜16:30 (max 30分)</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">—</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">勤務開始前</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">出勤〜8:30<br>(max 30分)</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">出勤〜16:30<br>(max 30分)</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">出勤〜8:30<br>(max 30分)</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
           </tr>
           <tr>
-            <td style="padding:6px;border:1px solid var(--line-soft);">時間外開始</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">17:30</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">—</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">9:30</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">時間外開始</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">17:30</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">9:30</td>
           </tr>
           <tr>
-            <td style="padding:6px;border:1px solid var(--line-soft);">時間外終了</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">退勤時刻</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">—</td>
-            <td style="padding:6px;border:1px solid var(--line-soft);">退勤時刻 (前夜の)</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">時間外終了</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">退勤時刻</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">翌朝の退勤時刻<br>(9:30以降)</td>
           </tr>
         </tbody>
       </table>
@@ -1092,6 +1157,8 @@ const state = {
   },
   syncStatus: 'unknown', // 'ok' | 'busy' | 'warn' | 'offline' | 'unknown'
   monthlyTotals: {},   // {"2026-05": "8:25"}
+  currentMonthSid: null,
+  currentMonthStats: null,
 };
 
 /* ================================================== Storage ================================================== */
@@ -1308,8 +1375,16 @@ async function sheetsValuesGet(spreadsheetId, range, opts = {}) {
   const params = new URLSearchParams({ valueRenderOption: opts.valueRenderOption || 'FORMATTED_VALUE' });
   return gApi('GET', `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?${params}`);
 }
+async function sheetsValuesBatchGet(spreadsheetId, ranges, opts = {}) {
+  const params = new URLSearchParams({ valueRenderOption: opts.valueRenderOption || 'FORMATTED_VALUE' });
+  ranges.forEach(r => params.append('ranges', r));
+  return gApi('GET', `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values:batchGet?${params}`);
+}
+async function updatePlannedHours(spreadsheetId, hours) {
+  return sheetsValuesBatchUpdate(spreadsheetId, [{ range: 'F1', values: [[hours]] }], 'USER_ENTERED');
+}
 
-function buildInitRequests(year, month, doctorName) {
+function buildInitRequests(year, month, doctorName, plannedHours = 0) {
   const sheetId = 0;
   const numFmtTime = { type: 'TIME', pattern: 'h:mm' };
   const numFmtDate = { type: 'DATE', pattern: 'd' };
@@ -1348,7 +1423,7 @@ function buildInitRequests(year, month, doctorName) {
             { userEnteredValue: { numberValue: year }, userEnteredFormat: { horizontalAlignment: 'RIGHT' } },
             { userEnteredValue: { stringValue: '年' } },
             { userEnteredValue: { stringValue: '予定時間外' } },
-            { userEnteredValue: { numberValue: 0 }, userEnteredFormat: { numberFormat: numFmtNum, horizontalAlignment: 'RIGHT' } },
+            { userEnteredValue: { numberValue: plannedHours }, userEnteredFormat: { numberFormat: numFmtNum, horizontalAlignment: 'RIGHT' } },
             { userEnteredValue: { stringValue: '時間' } },
           ]},
           { values: [
@@ -1423,10 +1498,22 @@ async function getOrCreateMonthlySheet(year, month) {
   let id = await findSheetInFolder(folderId, sheetName);
   if (!id) {
     id = await createSheetInFolder(folderId, sheetName);
+    // Try to read planned overtime from schedule JSON if available
+    let plannedHours = 0;
+    let sched = null;
+    try {
+      sched = await fetchSchedule(year, month);
+      const ph = sched?.planned_overtime?.[state.currentDoctor];
+      if (typeof ph === 'number' && ph >= 0 && ph <= 80) plannedHours = ph;
+    } catch {}
     // Initialize structure
-    await sheetsBatchUpdate(id, buildInitRequests(year, month, state.currentDoctor));
-    // Try to populate 勤務 column from schedule
-    await populateScheduleColumn(id, year, month).catch(e => console.warn('schedule populate failed:', e));
+    await sheetsBatchUpdate(id, buildInitRequests(year, month, state.currentDoctor, plannedHours));
+    // Populate 勤務 column from schedule (reuse already-fetched data if possible)
+    if (sched) {
+      await populateScheduleColumnFromData(id, year, month, sched).catch(e => console.warn('schedule populate failed:', e));
+    } else {
+      await populateScheduleColumn(id, year, month).catch(e => console.warn('schedule populate failed:', e));
+    }
   }
   state.cache.sheets[key] = id;
   saveCache();
@@ -1435,6 +1522,10 @@ async function getOrCreateMonthlySheet(year, month) {
 
 async function populateScheduleColumn(spreadsheetId, year, month) {
   const sched = await fetchSchedule(year, month).catch(() => null);
+  if (!sched || !sched.days) return;
+  return populateScheduleColumnFromData(spreadsheetId, year, month, sched);
+}
+async function populateScheduleColumnFromData(spreadsheetId, year, month, sched) {
   if (!sched || !sched.days) return;
   const data = [];
   for (let day = 1; day <= 31; day++) {
@@ -1446,20 +1537,35 @@ async function populateScheduleColumn(spreadsheetId, year, month) {
   if (data.length > 0) await sheetsValuesBatchUpdate(spreadsheetId, data);
 }
 
-async function readMonthTotal(spreadsheetId) {
+async function readMonthStats(spreadsheetId) {
+  // Returns { planned, actualFormatted, actualHours, totalHours, remainingHours }
   try {
-    const r = await sheetsValuesGet(spreadsheetId, 'G35', { valueRenderOption: 'FORMATTED_VALUE' });
-    return r.values?.[0]?.[0] || '0:00';
-  } catch (e) { console.warn('readMonthTotal:', e); return null; }
-}
-async function readPlannedAndRemaining(spreadsheetId) {
-  try {
-    const r = await sheetsValuesGet(spreadsheetId, 'F1:F2', { valueRenderOption: 'FORMATTED_VALUE' });
+    const [unformatted, formatted] = await Promise.all([
+      sheetsValuesBatchGet(spreadsheetId, ['F1', 'G35'], { valueRenderOption: 'UNFORMATTED_VALUE' }),
+      sheetsValuesBatchGet(spreadsheetId, ['G35'], { valueRenderOption: 'FORMATTED_VALUE' }),
+    ]);
+    const planned = Number(unformatted.valueRanges?.[0]?.values?.[0]?.[0]) || 0;
+    const actualFrac = Number(unformatted.valueRanges?.[1]?.values?.[0]?.[0]) || 0;
+    const actualHours = actualFrac * 24;
+    const totalHours = planned + actualHours;
+    const remainingHours = 80 - totalHours;
     return {
-      planned: r.values?.[0]?.[0] || '0',
-      remaining: r.values?.[1]?.[0] || '0',
+      planned,
+      actualFormatted: formatted.valueRanges?.[0]?.values?.[0]?.[0] || '0:00',
+      actualHours,
+      totalHours,
+      remainingHours,
     };
-  } catch { return null; }
+  } catch (e) {
+    console.warn('readMonthStats:', e);
+    return null;
+  }
+}
+
+// Backwards-compat shim used by auto-action splash
+async function readMonthTotal(spreadsheetId) {
+  const s = await readMonthStats(spreadsheetId);
+  return s?.actualFormatted || '0:00';
 }
 
 /* ================================================== Schedule ================================================== */
@@ -1529,8 +1635,8 @@ async function syncClockIn(session) {
   if (shift) updates.push({ range: `C${row}`, values: [[shift]] });
 
   let D = null;
-  if (shift === '日勤') D = preShiftOTFraction(ci, 8, 30);
-  else if (shift === '夜勤' || shift === '25勤') D = preShiftOTFraction(ci, 16, 30);
+  if (shift === '日勤' || shift === '25勤') D = preShiftOTFraction(ci, 8, 30);
+  else if (shift === '夜勤') D = preShiftOTFraction(ci, 16, 30);
   else if (shift === '明') D = null; // no D on 明
   else {
     // Unknown shift; default to 日勤 logic if morning, 夜勤 if afternoon
@@ -1682,35 +1788,72 @@ async function refreshTotals() {
   const y = now.getFullYear();
   const m = now.getMonth() + 1;
   const key = ymKey(y, m);
-  const sid = state.cache.sheets[key];
-  if (!sid) {
-    setStat('--:--', '--:--', '0', y, m, null);
+  state.currentMonthSid = state.cache.sheets[key] || null;
+  state.currentMonthStats = null;
+  if (!state.currentMonthSid) {
+    renderStats(null, y, m);
     return;
   }
   try {
-    const [tot, fr] = await Promise.all([
-      readMonthTotal(sid),
-      readPlannedAndRemaining(sid)
-    ]);
-    state.monthlyTotals[key] = tot;
-    setStat(tot, fr?.remaining + 'h', fr?.planned, y, m, sid);
+    const stats = await readMonthStats(state.currentMonthSid);
+    state.currentMonthStats = stats;
+    state.monthlyTotals[key] = stats?.actualFormatted || '0:00';
+    renderStats(stats, y, m);
   } catch (e) {
     console.warn('refreshTotals:', e);
   }
 }
 
-function setStat(total, remainingHours, planned, year, month, sid) {
-  document.getElementById('stat-total').textContent = total;
-  document.getElementById('stat-month').textContent = `${month}月`;
-  document.getElementById('stat-remaining').textContent = remainingHours;
-  document.getElementById('stat-planned').textContent = `予定 ${planned}h`;
+function hoursToHM(h) {
+  if (h == null || isNaN(h)) return '--:--';
+  const sign = h < 0 ? '-' : '';
+  const abs = Math.abs(h);
+  const totalMin = Math.round(abs * 60);
+  return `${sign}${Math.floor(totalMin / 60)}:${String(totalMin % 60).padStart(2, '0')}`;
+}
+
+function renderStats(stats, year, month) {
+  const monthEl   = document.getElementById('stat-month');
+  const totalEl   = document.getElementById('stat-total');
+  const remainEl  = document.getElementById('stat-remaining');
+  const plannedEl = document.getElementById('stat-planned');
+  const remainWrap = document.getElementById('stat-remaining-wrap');
   const link = document.getElementById('sheet-link');
-  if (sid) {
-    link.href = `https://docs.google.com/spreadsheets/d/${sid}/edit`;
-    link.style.display = '';
-  } else {
+  const warnEl = document.getElementById('limit-warning');
+
+  monthEl.textContent = `${month}月`;
+  remainWrap.classList.remove('warn', 'danger');
+  warnEl.style.display = 'none';
+
+  if (!stats) {
+    totalEl.textContent = '--:--';
+    remainEl.textContent = '--:--';
+    plannedEl.innerHTML = `予定 --h <span class="edit-icon">✎</span>`;
     link.style.display = 'none';
+    return;
   }
+
+  totalEl.textContent = stats.actualFormatted;
+  plannedEl.innerHTML = `予定 ${stats.planned}h <span class="edit-icon">✎</span>`;
+
+  if (stats.remainingHours < 0) {
+    remainEl.textContent = '超過 ' + hoursToHM(-stats.remainingHours);
+    remainWrap.classList.add('danger');
+    warnEl.style.display = '';
+    warnEl.className = 'limit-warning danger';
+    warnEl.innerHTML = `⚠ 月80時間を <strong>${hoursToHM(-stats.remainingHours)}</strong> 超過しています`;
+  } else if (stats.remainingHours < 10) {
+    remainEl.textContent = hoursToHM(stats.remainingHours);
+    remainWrap.classList.add('warn');
+    warnEl.style.display = '';
+    warnEl.className = 'limit-warning';
+    warnEl.innerHTML = `⚠ 月80時間まで残り <strong>${hoursToHM(stats.remainingHours)}</strong>`;
+  } else {
+    remainEl.textContent = hoursToHM(stats.remainingHours);
+  }
+
+  link.href = `https://docs.google.com/spreadsheets/d/${state.currentMonthSid}/edit`;
+  link.style.display = '';
 }
 
 /* ================================================== Clock in/out ================================================== */
@@ -1831,6 +1974,10 @@ function renderClock() {
     btn.className = 'big-btn';
     dot.classList.remove('active');
     txt.textContent = '勤務外';
+  }
+  const specifyBtn = document.getElementById('specify-time-btn');
+  if (specifyBtn) {
+    specifyBtn.innerHTML = `<span class="icon">⏰</span>${open ? '時刻を指定して退勤' : '時刻を指定して打刻'}`;
   }
 
   renderShiftsList(5);
@@ -2058,7 +2205,72 @@ function changeDoctor() {
   renderDoctorSelect();
 }
 
-/* ================================================== Settings actions ================================================== */
+/* ================================================== Planned hours editor ================================================== */
+async function openPlannedHoursEditor() {
+  // Need a sheet for current month; create if missing
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+
+  if (!isAuthed()) {
+    toast('Google にサインインしてください', 'error');
+    return;
+  }
+
+  let currentValue = state.currentMonthStats?.planned ?? 0;
+
+  showModal(`
+    <h3>${year}年${month}月の予定時間外</h3>
+    <p class="ink-soft" style="font-size:12px;margin-bottom:14px;">
+      勤務表に基づいて予め設定された予定時間外労働時間を入力してください。<br>
+      実績との合計が80時間を超えないように管理されます。
+    </p>
+    <div class="field">
+      <label>予定時間外 (時間)</label>
+      <input type="text" id="planned-input" inputmode="decimal" value="${currentValue}">
+      <p class="ink-mute" style="font-size:11px;margin-top:6px;">0〜80の数値 (小数可)</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn outline" data-modal-close>キャンセル</button>
+      <button class="btn" id="planned-save">保存</button>
+    </div>
+  `);
+
+  document.getElementById('planned-save').addEventListener('click', async () => {
+    const v = parseFloat(document.getElementById('planned-input').value);
+    if (isNaN(v) || v < 0 || v > 80) {
+      toast('0〜80の数値を入力してください', 'error');
+      return;
+    }
+    closeModal();
+    setSyncStatus('busy');
+    try {
+      // Ensure sheet exists for current month
+      const sid = await getOrCreateMonthlySheet(year, month);
+      await updatePlannedHours(sid, v);
+      setSyncStatus('ok');
+      toast(`予定時間外を ${v}h に設定しました`, 'success');
+      await refreshTotals();
+    } catch (e) {
+      console.error(e);
+      setSyncStatus('warn');
+      toast('保存失敗: ' + e.message, 'error');
+    }
+  });
+}
+
+/* ================================================== Specify-time clock action ================================================== */
+function specifyTimeAction() {
+  const open = getOpenShift();
+  // Reuses existing shift editor, contextually
+  if (open) {
+    openShiftEditor(open.id);
+  } else {
+    openShiftEditor(null, true);
+  }
+}
+
+
 function handleSaveClientId() {
   state.settings.clientId = document.getElementById('client-id-input').value.trim();
   saveSettings();
@@ -2503,6 +2715,7 @@ function bindEvents() {
   document.getElementById('clock-toggle').addEventListener('click', () => {
     if (getOpenShift()) clockOutAction(); else clockInAction();
   });
+  document.getElementById('specify-time-btn').addEventListener('click', specifyTimeAction);
   document.getElementById('bottom-nav').addEventListener('click', (e) => {
     const v = e.target.closest('button')?.dataset.view;
     if (v) showView(v);
@@ -2513,6 +2726,7 @@ function bindEvents() {
     switch (a) {
       case 'change-doctor':       changeDoctor(); break;
       case 'add-manual':          openShiftEditor(null, true); break;
+      case 'edit-planned':        openPlannedHoursEditor(); break;
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
       case 'signout':             signOut(); break;
