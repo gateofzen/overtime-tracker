@@ -677,6 +677,109 @@
   }
   textarea { font-family: var(--mono); font-size: 12px; min-height: 90px; resize: vertical; }
 
+  /* Date + time picker layout (split for better mobile UX with calendar UI) */
+  .datetime-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .datetime-row input[type="date"],
+  .datetime-row input[type="time"] {
+    font-family: var(--mono);
+    font-size: 14px;
+    text-align: center;
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 38px;
+  }
+  .quick-dates {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4px;
+  }
+  .quick-dates button {
+    padding: 6px 8px;
+    font-size: 11px;
+    font-family: var(--sans);
+    color: var(--ink-soft);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .quick-dates button:hover {
+    background: var(--paper-soft);
+    color: var(--ink);
+    border-color: var(--ink-soft);
+  }
+  .quick-dates button:active {
+    transform: scale(0.98);
+  }
+
+  /* ================================================== Shift schedule editor ================================================== */
+  .shift-editor-quick {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .shift-editor-quick button {
+    padding: 8px 6px;
+    font-size: 11px;
+    letter-spacing: 0;
+    text-align: center;
+  }
+  .shift-editor-list {
+    max-height: 50vh;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    margin-bottom: 14px;
+  }
+  .shift-day-row {
+    display: grid;
+    grid-template-columns: 36px 28px 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .shift-day-row:last-child { border-bottom: none; }
+  .shift-day-row.weekend .day-num,
+  .shift-day-row.weekend .day-dow {
+    color: var(--terracotta);
+  }
+  .shift-day-row.today {
+    background: rgba(184, 137, 58, 0.08);
+  }
+  .shift-day-row .day-num {
+    font-family: var(--mono);
+    font-size: 14px;
+    text-align: center;
+    font-weight: 500;
+  }
+  .shift-day-row .day-dow {
+    font-family: var(--serif);
+    font-size: 13px;
+    text-align: center;
+    color: var(--ink-soft);
+  }
+  .shift-day-row select {
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 6px 8px;
+    background: var(--paper-card);
+    min-height: 34px;
+  }
+  .shift-day-row select.has-value {
+    font-weight: 500;
+  }
+  .shift-day-row select.shift-day  { color: var(--moss); }
+  .shift-day-row select.shift-night{ color: var(--terracotta); }
+  .shift-day-row select.shift-25kin{ color: var(--gold); }
+  .shift-day-row select.shift-ake  { color: var(--gold); }
+
   .btn {
     padding: 10px 18px;
     font-family: var(--sans);
@@ -1181,11 +1284,11 @@
     <div class="card">
       <h2 class="section-title">スプレッドシート</h2>
       <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
-        既に作成済みのシートに最新の書式 (色・フォント・列幅) を適用します。<br>
-        値・打刻データはそのまま保持されます。
+        勤務表データが反映されない場合や、書式を最新にしたいときに使います。
       </p>
       <div class="btn-row">
-        <button class="btn outline" data-action="reformat-sheet">今月のシートを再書式</button>
+        <button class="btn outline" data-action="edit-shifts">勤務表を編集</button>
+        <button class="btn outline" data-action="reformat-sheet">書式を更新</button>
       </div>
     </div>
 
@@ -1781,15 +1884,26 @@ async function syncClockIn(session) {
   setSyncStatus('busy');
   const spreadsheetId = await getOrCreateMonthlySheet(year, month);
 
-  // Determine shift type from schedule
+  // Determine shift type:
+  //   1. Prefer existing C column value (preserves user's manual edits)
+  //   2. Fall back to JSON schedule
   let shift = null;
+  let existingC = null;
   try {
-    const sched = await fetchSchedule(year, month);
-    shift = shiftFromSchedule(ci, state.currentDoctor, sched);
-  } catch (e) { console.warn('schedule fetch:', e); }
+    const r = await sheetsValuesGet(spreadsheetId, `C${row}`, { valueRenderOption: 'FORMATTED_VALUE' });
+    existingC = r.values?.[0]?.[0] || null;
+    if (existingC) shift = existingC;
+  } catch (e) { console.warn('read C:', e); }
+  if (!shift) {
+    try {
+      const sched = await fetchSchedule(year, month);
+      shift = shiftFromSchedule(ci, state.currentDoctor, sched);
+    } catch (e) { console.warn('schedule fetch:', e); }
+  }
 
   const updates = [];
-  if (shift) updates.push({ range: `C${row}`, values: [[shift]] });
+  // Only write C if it's currently empty (preserve user's manual edits)
+  if (shift && !existingC) updates.push({ range: `C${row}`, values: [[shift]] });
 
   let D = null;
   if (shift === '日勤' || shift === '25勤') D = preShiftOTFraction(ci, 8, 30);
@@ -1822,14 +1936,23 @@ async function syncClockOut(session) {
   const ci = new Date(session.clockIn);
   const co = new Date(session.clockOut);
 
-  // Determine shift on clock-in date
+  // Determine shift on clock-in date — prefer existing sheet value, then JSON
   const ciYear = ci.getFullYear();
   const ciMonth = ci.getMonth() + 1;
+  const ciDay = ci.getDate();
   let shift = null;
+  let ciSpreadsheetId;
   try {
-    const sched = await fetchSchedule(ciYear, ciMonth);
-    shift = shiftFromSchedule(ci, state.currentDoctor, sched);
+    ciSpreadsheetId = await getOrCreateMonthlySheet(ciYear, ciMonth);
+    const r = await sheetsValuesGet(ciSpreadsheetId, `C${ciDay + 3}`, { valueRenderOption: 'FORMATTED_VALUE' });
+    shift = r.values?.[0]?.[0] || null;
   } catch {}
+  if (!shift) {
+    try {
+      const sched = await fetchSchedule(ciYear, ciMonth);
+      shift = shiftFromSchedule(ci, state.currentDoctor, sched);
+    } catch {}
+  }
 
   // Decide target row & sheet
   // 日勤: clockIn date's row
@@ -1881,15 +2004,23 @@ async function syncClockOut(session) {
     updates.push({ range: `F${row}`, values: [['']] });
   }
 
-  // For 夜勤/25勤, also ensure C of target row is "明" if not set by schedule
-  if ((shift === '夜勤' || shift === '25勤')) {
-    let targetShift = null;
+  // For 夜勤/25勤, mark target row as "明" only if BOTH the sheet and JSON are empty
+  // (preserve any user manual entry)
+  if (shift === '夜勤' || shift === '25勤') {
+    let targetExisting = null;
     try {
-      const sched = await fetchSchedule(tYear, tMonth);
-      targetShift = shiftFromSchedule(targetDate, state.currentDoctor, sched);
+      const r = await sheetsValuesGet(spreadsheetId, `C${row}`, { valueRenderOption: 'FORMATTED_VALUE' });
+      targetExisting = r.values?.[0]?.[0] || null;
     } catch {}
-    if (!targetShift) {
-      updates.push({ range: `C${row}`, values: [['明']] });
+    if (!targetExisting) {
+      let targetShift = null;
+      try {
+        const sched = await fetchSchedule(tYear, tMonth);
+        targetShift = shiftFromSchedule(targetDate, state.currentDoctor, sched);
+      } catch {}
+      if (!targetShift) {
+        updates.push({ range: `C${row}`, values: [['明']] });
+      }
     }
   }
 
@@ -2064,52 +2195,74 @@ async function renderTodayShift() {
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
   const dateKey = formatDateKey(now);
+  const todayDay = now.getDate();
+  const editBtn = `<button class="reload-btn" data-action="edit-shifts" title="勤務表を編集">✎ 編集</button>`;
+  const reloadBtn = `<button class="reload-btn" data-action="reload-today-shift" title="再取得">⟳</button>`;
 
-  try {
-    const sched = await fetchSchedule(year, month);
-    const shift = shiftFromSchedule(now, state.currentDoctor, sched);
-    const shiftClass = {
-      '日勤':  'shift-day',
-      '夜勤':  'shift-night',
-      '25勤':  'shift-25kin',
-      '明':    'shift-ake',
-      '休':    '',
-      '出張':  '',
-    }[shift] || '';
-    if (shiftClass) el.classList.add(shiftClass);
+  // Try to determine today's shift, preferring user's sheet entry over JSON
+  let shift = null;
+  let source = '';
+  let sched = null;
+  let sheetUnavailable = false;
+  let jsonUnavailable = false;
 
-    if (shift) {
-      el.innerHTML = `
-        <span class="shift-prefix">本日の勤務</span>
-        <span class="shift-type">${shift}</span>
-        <button class="reload-btn" data-action="reload-today-shift" title="再取得">⟳</button>
-      `;
-    } else {
-      // Schedule fetched OK but no entry for this doctor today
-      const day = sched?.days?.[dateKey];
-      if (!day) {
-        el.innerHTML = `
-          <span class="shift-prefix">本日の勤務予定</span>
-          <span style="color:var(--ink-mute);">登録なし</span>
-          <span style="font-size:10px;color:var(--ink-mute);">　(${dateKey}のデータが勤務表に存在しません)</span>
-          <button class="reload-btn" data-action="reload-today-shift">⟳</button>
-        `;
-      } else {
-        el.innerHTML = `
-          <span class="shift-prefix">本日の勤務予定</span>
-          <span style="color:var(--ink-mute);">登録なし</span>
-          <span style="font-size:10px;color:var(--ink-mute);">　(${state.currentDoctor}は${dateKey}に勤務予定なし)</span>
-          <button class="reload-btn" data-action="reload-today-shift">⟳</button>
-        `;
-      }
+  // 1. Check sheet's C column for today
+  const sid = state.cache.sheets[ymKey(year, month)] || state.currentMonthSid;
+  if (sid && isAuthed()) {
+    try {
+      const r = await sheetsValuesGet(sid, `C${todayDay + 3}`, { valueRenderOption: 'FORMATTED_VALUE' });
+      const v = r.values?.[0]?.[0];
+      if (v) { shift = v; source = '個人記録'; }
+    } catch (e) {
+      sheetUnavailable = true;
+      console.warn('sheet C read:', e);
     }
-  } catch (e) {
+  }
+
+  // 2. Fall back to JSON
+  if (!shift) {
+    try {
+      sched = await fetchSchedule(year, month);
+      const jsonShift = shiftFromSchedule(now, state.currentDoctor, sched);
+      if (jsonShift) { shift = jsonShift; source = '勤務表'; }
+    } catch (e) {
+      jsonUnavailable = true;
+      console.warn('schedule fetch:', e);
+    }
+  }
+
+  // Apply CSS class for color
+  const shiftClass = {
+    '日勤':  'shift-day',
+    '夜勤':  'shift-night',
+    '25勤':  'shift-25kin',
+    '明':    'shift-ake',
+  }[shift] || '';
+  if (shiftClass) el.classList.add(shiftClass);
+
+  if (shift) {
+    el.innerHTML = `
+      <span class="shift-prefix">本日の勤務</span>
+      <span class="shift-type">${shift}</span>
+      <span style="font-size:10px;color:var(--ink-mute);margin-left:6px;">(${source})</span>
+      ${reloadBtn}
+      ${editBtn}
+    `;
+  } else if (jsonUnavailable && !sid) {
     el.classList.add('error');
     el.innerHTML = `
-      <span style="font-size:11px;">⚠ 勤務表取得失敗: ${e.message}</span>
-      <button class="reload-btn" data-action="reload-today-shift">⟳ 再取得</button>
+      <span style="font-size:11px;">⚠ 勤務表JSONを取得できません</span>
+      ${reloadBtn}
+      ${editBtn}
     `;
-    console.warn('renderTodayShift error:', e);
+  } else {
+    // No data found in sheet or JSON
+    el.innerHTML = `
+      <span class="shift-prefix">本日の勤務予定</span>
+      <span style="color:var(--ink-mute);">登録なし</span>
+      ${reloadBtn}
+      ${editBtn}
+    `;
   }
 }
 
@@ -2126,6 +2279,7 @@ async function clockInAction() {
   };
   state.shifts.push(session);
   saveShifts();
+  sessionStorage.setItem('geo_last_clock', String(Date.now()));
   toast('出勤を記録しました', 'success');
   renderClock();
 
@@ -2146,6 +2300,7 @@ async function clockOutAction() {
   if (!open) { toast('出勤記録がありません', 'error'); return; }
   open.clockOut = new Date().toISOString();
   saveShifts();
+  sessionStorage.setItem('geo_last_clock', String(Date.now()));
   toast('退勤を記録しました', 'success');
   renderClock();
 
@@ -2341,32 +2496,78 @@ function openShiftEditor(id, isNew = false) {
     shift = state.shifts.find(s => s.id === id);
     if (!shift) return;
   }
-  const fmtForInput = (iso) => {
+  const dateValue = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
-    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
   };
+  const timeValue = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const today     = formatDateKey(new Date());
+  const yesterday = formatDateKey(addDays(new Date(), -1));
+  const dayBefore = formatDateKey(addDays(new Date(), -2));
+
   showModal(`
     <h3>${isNew ? '打刻を手動追加' : '打刻を編集'}</h3>
     <div class="field">
       <label>出勤日時</label>
-      <input type="datetime-local" id="edit-in" value="${fmtForInput(shift.clockIn)}">
+      <div class="datetime-row">
+        <input type="date" id="edit-in-date" value="${dateValue(shift.clockIn)}">
+        <input type="time" id="edit-in-time" value="${timeValue(shift.clockIn)}" step="60">
+      </div>
+      <div class="quick-dates" data-target="edit-in-date">
+        <button type="button" data-quick-date="${today}">今日</button>
+        <button type="button" data-quick-date="${yesterday}">昨日</button>
+        <button type="button" data-quick-date="${dayBefore}">一昨日</button>
+      </div>
     </div>
     <div class="field">
       <label>退勤日時 (空欄=未退勤)</label>
-      <input type="datetime-local" id="edit-out" value="${fmtForInput(shift.clockOut)}">
+      <div class="datetime-row">
+        <input type="date" id="edit-out-date" value="${dateValue(shift.clockOut)}">
+        <input type="time" id="edit-out-time" value="${timeValue(shift.clockOut)}" step="60">
+      </div>
+      <div class="quick-dates" data-target="edit-out-date">
+        <button type="button" data-quick-date="${today}">今日</button>
+        <button type="button" data-quick-date="${yesterday}">昨日</button>
+        <button type="button" data-quick-date="${dayBefore}">一昨日</button>
+      </div>
     </div>
     <div class="modal-actions">
       <button class="btn outline" data-modal-close>キャンセル</button>
       <button class="btn" id="modal-save">保存して同期</button>
     </div>
   `);
+
+  // Bind quick-date buttons
+  document.querySelectorAll('.quick-dates button').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const target = e.currentTarget.closest('.quick-dates').dataset.target;
+      const date = e.currentTarget.dataset.quickDate;
+      document.getElementById(target).value = date;
+    });
+  });
+
   document.getElementById('modal-save').addEventListener('click', async () => {
-    const inV = document.getElementById('edit-in').value;
-    const outV = document.getElementById('edit-out').value;
-    if (!inV) { toast('出勤日時は必須です', 'error'); return; }
-    const newIn = new Date(inV).toISOString();
-    const newOut = outV ? new Date(outV).toISOString() : null;
+    const inDate  = document.getElementById('edit-in-date').value;
+    const inTime  = document.getElementById('edit-in-time').value;
+    const outDate = document.getElementById('edit-out-date').value;
+    const outTime = document.getElementById('edit-out-time').value;
+
+    if (!inDate || !inTime) { toast('出勤の日付と時刻は必須です', 'error'); return; }
+
+    const newIn  = new Date(`${inDate}T${inTime}:00`).toISOString();
+    let newOut = null;
+    if (outDate && outTime) {
+      newOut = new Date(`${outDate}T${outTime}:00`).toISOString();
+    } else if (outDate || outTime) {
+      toast('退勤は日付と時刻の両方を入力してください', 'error');
+      return;
+    }
     if (newOut && new Date(newOut) < new Date(newIn)) { toast('退勤が出勤より前です', 'error'); return; }
 
     // If editing existing, attempt to clear old sheet data first
@@ -2379,6 +2580,7 @@ function openShiftEditor(id, isNew = false) {
     shift.syncedSheetIds = [];
     if (isNew) state.shifts.push(shift);
     saveShifts();
+    sessionStorage.setItem('geo_last_clock', String(Date.now()));
     closeModal();
     renderClock();
 
@@ -2466,7 +2668,188 @@ function changeDoctor() {
   renderDoctorSelect();
 }
 
-/* ================================================== Reformat existing sheet ================================================== */
+/* ================================================== Shift schedule editor ================================================== */
+async function openShiftScheduleEditor() {
+  if (!isAuthed()) {
+    showModal(`
+      <h3>Google サインインが必要です</h3>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        勤務表をスプレッドシートに保存するため、Google にサインインしてください。
+      </p>
+      <div class="modal-actions">
+        <button class="btn outline" data-modal-close>キャンセル</button>
+        <button class="btn" id="modal-signin">サインイン</button>
+      </div>
+    `);
+    document.getElementById('modal-signin').addEventListener('click', async () => {
+      closeModal();
+      await startSignIn();
+      if (isAuthed()) setTimeout(() => openShiftScheduleEditor(), 200);
+    });
+    return;
+  }
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  const todayDay = now.getDate();
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  showModal(`<h3>勤務表編集</h3><p class="empty-state"><span class="spinner"></span> 読み込み中…</p>`);
+
+  setSyncStatus('busy');
+  let sid;
+  let currentShifts = {};      // {day: shiftType}
+  let scheduleFromJSON = null; // for "JSONから埋める" feature
+
+  try {
+    sid = await getOrCreateMonthlySheet(year, month);
+    // Read current C4..C{34} values
+    const r = await sheetsValuesGet(sid, 'C4:C34', { valueRenderOption: 'FORMATTED_VALUE' });
+    if (r.values) {
+      r.values.forEach((row, i) => {
+        if (row[0]) currentShifts[i + 1] = row[0];
+      });
+    }
+    // Try fetch JSON (for "fill from JSON" feature - non-blocking)
+    try {
+      scheduleFromJSON = await fetchSchedule(year, month);
+    } catch {}
+    setSyncStatus('ok');
+  } catch (e) {
+    setSyncStatus('warn');
+    toast('読み込み失敗: ' + e.message, 'error');
+    closeModal();
+    return;
+  }
+
+  const SHIFT_OPTIONS = ['', '日勤', '夜勤', '25勤', '明', '休', '出張'];
+  const shiftCssClass = {
+    '日勤': 'shift-day',
+    '夜勤': 'shift-night',
+    '25勤': 'shift-25kin',
+    '明':   'shift-ake',
+  };
+
+  function buildSelect(day, currentValue) {
+    const opts = SHIFT_OPTIONS.map(o =>
+      `<option value="${o}" ${o === currentValue ? 'selected' : ''}>${o || '─'}</option>`
+    ).join('');
+    const cls = shiftCssClass[currentValue] || '';
+    const has = currentValue ? 'has-value' : '';
+    return `<select class="day-shift ${cls} ${has}" data-day="${day}">${opts}</select>`;
+  }
+
+  let dayRowsHtml = '';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const date = new Date(year, month - 1, day);
+    const dow = WEEKDAY_JP[date.getDay()];
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    const isToday = day === todayDay;
+    const current = currentShifts[day] || '';
+    dayRowsHtml += `
+      <div class="shift-day-row ${isWeekend ? 'weekend' : ''} ${isToday ? 'today' : ''}">
+        <span class="day-num">${day}</span>
+        <span class="day-dow">${dow}</span>
+        ${buildSelect(day, current)}
+      </div>
+    `;
+  }
+
+  const jsonAvailable = !!scheduleFromJSON;
+  const jsonButtonsHtml = jsonAvailable ? `
+    <button type="button" class="btn outline" data-quick-shift="json-fill">JSONから埋める</button>
+    <button type="button" class="btn outline" data-quick-shift="json-overwrite">JSONで上書き</button>
+  ` : `
+    <button type="button" class="btn outline" disabled style="grid-column:span 2;">勤務表JSON取得失敗</button>
+  `;
+
+  document.getElementById('modal-content').innerHTML = `
+    <h3>${year}年${month}月の勤務表</h3>
+    <p class="ink-soft" style="font-size:11px;margin-bottom:10px;">
+      各日の勤務種別を選択してください。${jsonAvailable ? '今月の勤務表JSONも取得できています。' : '⚠ 今月の勤務表JSONはまだ取得できません。'}
+    </p>
+    <div class="shift-editor-quick">
+      <button type="button" class="btn outline" data-quick-shift="weekday-day">平日日勤・週末休</button>
+      <button type="button" class="btn outline" data-quick-shift="clear">全クリア</button>
+      ${jsonButtonsHtml}
+    </div>
+    <div class="shift-editor-list">${dayRowsHtml}</div>
+    <div class="modal-actions">
+      <button class="btn outline" data-modal-close>キャンセル</button>
+      <button class="btn" id="shift-save">保存して同期</button>
+    </div>
+  `;
+
+  // Re-bind close
+  document.querySelectorAll('[data-modal-close]').forEach(b =>
+    b.addEventListener('click', closeModal));
+
+  // Re-style select on change
+  document.querySelectorAll('.day-shift').forEach(sel => {
+    sel.addEventListener('change', () => {
+      sel.classList.remove('shift-day', 'shift-night', 'shift-25kin', 'shift-ake', 'has-value');
+      const cls = shiftCssClass[sel.value];
+      if (cls) sel.classList.add(cls);
+      if (sel.value) sel.classList.add('has-value');
+    });
+  });
+
+  // Quick shift handlers
+  document.querySelectorAll('[data-quick-shift]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.quickShift;
+      document.querySelectorAll('.day-shift').forEach(sel => {
+        const day = parseInt(sel.dataset.day);
+        const date = new Date(year, month - 1, day);
+        const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+        if (action === 'weekday-day') {
+          sel.value = isWeekend ? '休' : '日勤';
+        } else if (action === 'clear') {
+          sel.value = '';
+        } else if (action === 'json-fill') {
+          // Fill only empty cells with JSON shift (preserve manual edits)
+          if (!sel.value && scheduleFromJSON) {
+            const jsonShift = shiftFromSchedule(date, state.currentDoctor, scheduleFromJSON);
+            if (jsonShift) sel.value = jsonShift;
+          }
+        } else if (action === 'json-overwrite') {
+          // Overwrite all cells with JSON shift
+          const jsonShift = scheduleFromJSON ? shiftFromSchedule(date, state.currentDoctor, scheduleFromJSON) : null;
+          sel.value = jsonShift || '';
+        }
+        // Trigger change to update styling
+        sel.dispatchEvent(new Event('change'));
+      });
+    });
+  });
+
+  // Save handler
+  document.getElementById('shift-save').addEventListener('click', async () => {
+    const updates = [];
+    document.querySelectorAll('.day-shift').forEach(sel => {
+      const day = parseInt(sel.dataset.day);
+      updates.push({ range: `C${day + 3}`, values: [[sel.value]] });
+    });
+
+    closeModal();
+    setSyncStatus('busy');
+    try {
+      await sheetsValuesBatchUpdate(sid, updates, 'USER_ENTERED');
+      setSyncStatus('ok');
+      toast('勤務表を保存しました', 'success');
+      await refreshTotals();
+      await renderTodayShift();
+    } catch (e) {
+      console.error(e);
+      setSyncStatus('warn');
+      toast('保存失敗: ' + e.message, 'error');
+    }
+  });
+}
+
+
 async function reformatCurrentMonthSheet() {
   if (!isAuthed()) { toast('Google にサインインしてください', 'error'); return; }
   if (!confirm('今月のスプレッドシートに最新の書式を適用します。\n値はそのまま、見た目だけが更新されます。続けますか?')) return;
@@ -2739,25 +3122,35 @@ async function checkGeoProximity() {
 
 async function maybeShowGeoPrompt() {
   if (!state.settings.geoEnabled || !state.settings.hospitalLat) return;
-  // Only prompt once per session
-  if (sessionStorage.getItem('geo_prompted') === '1') return;
-  // Don't prompt if document is hidden (background tab)
   if (document.hidden) return;
 
-  const proximity = await checkGeoProximity();
-  const isOpen = !!getOpenShift();
+  const COOLDOWN_AFTER_CLOCK_MS  = 5  * 60 * 1000;  // 5 min after any clock action
+  const COOLDOWN_AFTER_PROMPT_MS = 30 * 60 * 1000;  // 30 min after a prompt was shown
+  const now = Date.now();
 
-  if (proximity === 'near' && !isOpen) {
-    sessionStorage.setItem('geo_prompted', '1');
+  // Don't prompt within 5 min of any clock action
+  const lastClock = parseInt(sessionStorage.getItem('geo_last_clock') || '0');
+  if (now - lastClock < COOLDOWN_AFTER_CLOCK_MS) return;
+
+  // Quick early exit if state is incompatible with prompts (avoid GPS request)
+  const isOpenBefore = !!getOpenShift();
+  const proximity = await checkGeoProximity();
+  // Re-check state AFTER GPS resolves (state may have changed during await)
+  const isOpenAfter = !!getOpenShift();
+
+  if (proximity === 'near' && !isOpenAfter) {
+    const lastInPrompt = parseInt(sessionStorage.getItem('geo_last_in_prompt') || '0');
+    if (now - lastInPrompt < COOLDOWN_AFTER_PROMPT_MS) return;
+    sessionStorage.setItem('geo_last_in_prompt', String(now));
     showGeoPrompt('in');
-  } else if (proximity === 'far' && isOpen) {
-    // Only suggest clock-out if shift has been at least 4 hours (avoid premature prompts)
+  } else if (proximity === 'far' && isOpenAfter) {
     const open = getOpenShift();
-    const hours = (Date.now() - new Date(open.clockIn).getTime()) / 3600000;
-    if (hours >= 4) {
-      sessionStorage.setItem('geo_prompted', '1');
-      showGeoPrompt('out');
-    }
+    const hours = (now - new Date(open.clockIn).getTime()) / 3600000;
+    if (hours < 4) return;  // too early to suggest clock-out
+    const lastOutPrompt = parseInt(sessionStorage.getItem('geo_last_out_prompt') || '0');
+    if (now - lastOutPrompt < COOLDOWN_AFTER_PROMPT_MS) return;
+    sessionStorage.setItem('geo_last_out_prompt', String(now));
+    showGeoPrompt('out');
   }
 }
 
@@ -2777,7 +3170,21 @@ function showGeoPrompt(direction) {
   showModal(html);
   document.getElementById('geo-confirm').addEventListener('click', async () => {
     closeModal();
-    if (isIn) await clockInAction(); else await clockOutAction();
+    // Re-check state at click time (state may have changed since prompt was shown)
+    const currentlyOpen = !!getOpenShift();
+    if (isIn) {
+      if (currentlyOpen) {
+        toast('既に出勤中です', '');
+        return;
+      }
+      await clockInAction();
+    } else {
+      if (!currentlyOpen) {
+        toast('出勤記録がありません', '');
+        return;
+      }
+      await clockOutAction();
+    }
   });
 }
 
@@ -3057,6 +3464,7 @@ function bindEvents() {
       case 'change-doctor':       changeDoctor(); break;
       case 'add-manual':          openShiftEditor(null, true); break;
       case 'edit-planned':        openPlannedHoursEditor(); break;
+      case 'edit-shifts':         openShiftScheduleEditor(); break;
       case 'reformat-sheet':      reformatCurrentMonthSheet(); break;
       case 'reload-today-shift':  state.scheduleCache = {}; renderTodayShift().catch(() => {}); break;
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
