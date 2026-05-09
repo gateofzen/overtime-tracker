@@ -1584,9 +1584,13 @@ async function sheetsValuesBatchGet(spreadsheetId, ranges, opts = {}) {
 async function updatePlannedHours(spreadsheetId, hours) {
   return sheetsValuesBatchUpdate(spreadsheetId, [{ range: 'F1', values: [[hours]] }], 'USER_ENTERED');
 }
+async function getFirstSheetId(spreadsheetId) {
+  // Returns the sheetId of the first tab (needed for reformat: imported sheets may not have ID 0)
+  const r = await gApi('GET', `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties(sheetId,title)`);
+  return r.sheets?.[0]?.properties?.sheetId ?? 0;
+}
 
-function buildInitRequests(year, month, doctorName, plannedHours = 0) {
-  const sheetId = 0;
+function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 0) {
 
   // ---------- Number formats (matching original Excel) ----------
   const numFmtTime = { type: 'TIME',   pattern: 'h:mm' };
@@ -1644,6 +1648,9 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0) {
 
     // Rename sheet to YYYY-MM
     { updateSheetProperties: { properties: { sheetId, title: ymKey(year, month) }, fields: 'title' } },
+
+    // Unmerge any existing merges in A1:B1 area first (prevents merge conflict on reformat)
+    { unmergeCells: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 2 } } },
 
     // Merge A1:B1 (name area)
     { mergeCells: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 2 }, mergeType: 'MERGE_ALL' } },
@@ -1735,6 +1742,34 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0) {
         innerHorizontal: { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
         innerVertical:   { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
       }
+    },
+
+    // Add dropdown (data validation) to C4:C34 for shift type input
+    {
+      setDataValidation: {
+        range: {
+          sheetId,
+          startRowIndex: 3,    // C4 (0-indexed)
+          endRowIndex: 34,     // C34 (exclusive)
+          startColumnIndex: 2, // C
+          endColumnIndex: 3,
+        },
+        rule: {
+          condition: {
+            type: 'ONE_OF_LIST',
+            values: [
+              { userEnteredValue: '日勤' },
+              { userEnteredValue: '夜勤' },
+              { userEnteredValue: '25勤' },
+              { userEnteredValue: '明' },
+              { userEnteredValue: '休' },
+              { userEnteredValue: '出張' },
+            ],
+          },
+          showCustomUi: true,
+          strict: false,
+        },
+      },
     },
 
     // Freeze the header rows (rows 1-3)
@@ -2879,14 +2914,18 @@ async function reformatCurrentMonthSheet() {
       if (!isNaN(v)) plannedHours = v;
     } catch {}
 
+    // Get the actual sheet ID (may not be 0 if imported from Excel)
+    const actualSheetId = await getFirstSheetId(id);
+
     // Apply the latest template structure
-    await sheetsBatchUpdate(id, buildInitRequests(y, m, state.currentDoctor, plannedHours));
+    await sheetsBatchUpdate(id, buildInitRequests(y, m, state.currentDoctor, plannedHours, actualSheetId));
     // Re-populate 勤務 column from schedule
     await populateScheduleColumn(id, y, m).catch(() => {});
 
     setSyncStatus('ok');
     toast('書式を更新しました', 'success');
     await refreshTotals();
+    await renderTodayShift();
   } catch (e) {
     console.error(e);
     setSyncStatus('warn');
