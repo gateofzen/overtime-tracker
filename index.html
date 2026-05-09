@@ -1737,24 +1737,23 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 
     { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 88 },  fields: 'pixelSize' } },  // F
     { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 80 },  fields: 'pixelSize' } },  // G
 
-    // Borders on data table (rows 3-34 only, NOT on total row 35)
+    // Borders on data table (rows 3-34 only) — thin BLACK lines (matching original Excel)
     {
       updateBorders: {
         range: { sheetId, startRowIndex: 2, endRowIndex: 34, startColumnIndex: 0, endColumnIndex: 7 },
-        top:    { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
-        bottom: { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
-        left:   { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
-        right:  { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
-        innerHorizontal: { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
-        innerVertical:   { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
+        top:    { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+        bottom: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+        left:   { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+        right:  { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+        innerHorizontal: { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
+        innerVertical:   { style: 'SOLID', color: { red: 0, green: 0, blue: 0 } },
       }
     },
 
-    // Clear any pre-existing borders on row 35 (total row should have NO borders by default)
+    // Clear row 35 borders EXCEPT top (preserves the row 34 bottom line we just drew)
     {
       updateBorders: {
         range: { sheetId, startRowIndex: 34, endRowIndex: 35, startColumnIndex: 0, endColumnIndex: 7 },
-        top:    { style: 'NONE' },
         bottom: { style: 'NONE' },
         left:   { style: 'NONE' },
         right:  { style: 'NONE' },
