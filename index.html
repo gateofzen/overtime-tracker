@@ -1158,6 +1158,17 @@
     </div>
 
     <div class="card">
+      <h2 class="section-title">スプレッドシート</h2>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        既に作成済みのシートに最新の書式 (色・フォント・列幅) を適用します。<br>
+        値・打刻データはそのまま保持されます。
+      </p>
+      <div class="btn-row">
+        <button class="btn outline" data-action="reformat-sheet">今月のシートを再書式</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2 class="section-title">データ管理</h2>
       <div class="btn-row">
         <button class="btn outline" data-action="export-data">エクスポート</button>
@@ -1452,99 +1463,158 @@ async function updatePlannedHours(spreadsheetId, hours) {
 
 function buildInitRequests(year, month, doctorName, plannedHours = 0) {
   const sheetId = 0;
-  const numFmtTime = { type: 'TIME', pattern: 'h:mm' };
-  const numFmtDate = { type: 'DATE', pattern: 'd' };
-  const numFmtDow  = { type: 'DATE', pattern: 'ddd' };
-  const numFmtCum  = { type: 'TIME', pattern: '[h]:mm' };
-  const numFmtNum  = { type: 'NUMBER', pattern: '0.00' };
 
-  const rows4to34 = [];
+  // ---------- Number formats (matching original Excel) ----------
+  const numFmtTime = { type: 'TIME',   pattern: 'h:mm' };
+  const numFmtDate = { type: 'DATE',   pattern: 'd' };
+  const numFmtDow  = { type: 'DATE',   pattern: 'ddd' };
+  const numFmtCum  = { type: 'TIME',   pattern: '[h]:mm' };
+  const numFmtNum  = { type: 'NUMBER', pattern: '0.00' };
+  const numFmtYear = { type: 'NUMBER', pattern: '0;[Red](0)' };
+
+  // ---------- Colors (from original Excel) ----------
+  const colorBlue   = { red: 0.851, green: 0.886, blue: 0.953 }; // #D9E2F3
+  const colorPeach  = { red: 0.969, green: 0.792, blue: 0.675 }; // #F7CAAC
+  const colorYellow = { red: 1.0,   green: 0.898, blue: 0.596 }; // #FFE598
+  const colorWhite  = { red: 1.0,   green: 1.0,   blue: 1.0   };
+
+  // ---------- Reusable formats ----------
+  const fmtName    = { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 20 } };
+  const fmtYear    = { numberFormat: numFmtYear, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 20 }, backgroundColor: colorBlue };
+  const fmtMonth   = { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 20 }, backgroundColor: colorBlue };
+  const fmtUnitMid = { horizontalAlignment: 'LEFT', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 11 } };
+  const fmtLabel10 = { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 10 } };
+  const fmtLabel10R = { horizontalAlignment: 'LEFT', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 10 } };
+  const fmtPlanned = { numberFormat: numFmtNum, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 20 } };
+  const fmtRemain  = { numberFormat: numFmtNum, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 20, bold: true }, backgroundColor: colorPeach };
+  const fmtHeader  = { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 11 }, backgroundColor: colorYellow, wrapStrategy: 'WRAP' };
+  const fmtDate    = { numberFormat: numFmtDate, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' };
+  const fmtDow     = { numberFormat: numFmtDow,  horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' };
+  const fmtShift   = { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' };
+  const fmtTimeC   = { numberFormat: numFmtTime, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' };
+  const fmtTotalLbl= { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { bold: true, fontSize: 11 } };
+  const fmtTotalVal= { numberFormat: numFmtCum, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { bold: true, fontSize: 11 } };
+
+  // ---------- Date rows (4..34) ----------
+  const dateRows = [];
   for (let i = 0; i < 31; i++) {
     const row = i + 4;
     const aF = i === 0 ? '=DATE(C1,C2,1)' : `=A${row - 1}+1`;
-    rows4to34.push({
+    dateRows.push({
       values: [
-        { userEnteredValue: { formulaValue: aF }, userEnteredFormat: { numberFormat: numFmtDate, horizontalAlignment: 'CENTER' } },
-        { userEnteredValue: { formulaValue: `=A${row}` }, userEnteredFormat: { numberFormat: numFmtDow, horizontalAlignment: 'CENTER' } },
-        { userEnteredFormat: { horizontalAlignment: 'CENTER' } },
-        { userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
-        { userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
-        { userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
-        { userEnteredValue: { formulaValue: `=D${row}+(F${row}-E${row})` }, userEnteredFormat: { numberFormat: numFmtTime, horizontalAlignment: 'CENTER' } },
+        { userEnteredValue: { formulaValue: aF },                        userEnteredFormat: fmtDate  },
+        { userEnteredValue: { formulaValue: `=A${row}` },                userEnteredFormat: fmtDow   },
+        { userEnteredFormat: fmtShift },
+        { userEnteredFormat: fmtTimeC },
+        { userEnteredFormat: fmtTimeC },
+        { userEnteredFormat: fmtTimeC },
+        { userEnteredValue: { formulaValue: `=D${row}+(F${row}-E${row})` }, userEnteredFormat: fmtTimeC },
       ]
     });
   }
 
+  // ---------- All requests ----------
   return [
+    // Locale & timezone
     { updateSpreadsheetProperties: { properties: { locale: 'ja_JP', timeZone: 'Asia/Tokyo' }, fields: 'locale,timeZone' } },
+
+    // Rename sheet to YYYY-MM
     { updateSheetProperties: { properties: { sheetId, title: ymKey(year, month) }, fields: 'title' } },
+
+    // Merge A1:B1 (name area)
     { mergeCells: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 2 }, mergeType: 'MERGE_ALL' } },
+
+    // Header rows 1-3
     {
       updateCells: {
         start: { sheetId, rowIndex: 0, columnIndex: 0 },
         rows: [
+          // Row 1: A1=name(merged) | C1=year | D1=年 | E1=予定時間外 | F1=plannedHours | G1=時間
           { values: [
-            { userEnteredValue: { stringValue: doctorName }, userEnteredFormat: { horizontalAlignment: 'CENTER', textFormat: { bold: true, fontSize: 12 } } },
-            {},
-            { userEnteredValue: { numberValue: year }, userEnteredFormat: { horizontalAlignment: 'RIGHT' } },
-            { userEnteredValue: { stringValue: '年' } },
-            { userEnteredValue: { stringValue: '予定時間外' } },
-            { userEnteredValue: { numberValue: plannedHours }, userEnteredFormat: { numberFormat: numFmtNum, horizontalAlignment: 'RIGHT' } },
-            { userEnteredValue: { stringValue: '時間' } },
+            { userEnteredValue: { stringValue: doctorName || '名前' }, userEnteredFormat: fmtName },
+            {},  // B1 merged with A1
+            { userEnteredValue: { numberValue: year },          userEnteredFormat: fmtYear },
+            { userEnteredValue: { stringValue: '年' },          userEnteredFormat: fmtUnitMid },
+            { userEnteredValue: { stringValue: '予定時間外' },   userEnteredFormat: fmtLabel10R },
+            { userEnteredValue: { numberValue: plannedHours },  userEnteredFormat: fmtPlanned },
+            { userEnteredValue: { stringValue: '時間' },         userEnteredFormat: fmtLabel10R },
           ]},
+          // Row 2: blank | blank | C2=month | D2=月 | E2=80時間まで | F2==80-F1 | G2=時間
           { values: [
-            {}, {},
-            { userEnteredValue: { numberValue: month }, userEnteredFormat: { horizontalAlignment: 'RIGHT' } },
-            { userEnteredValue: { stringValue: '月' } },
-            { userEnteredValue: { stringValue: '80時間まで' } },
-            { userEnteredValue: { formulaValue: '=80-F1' }, userEnteredFormat: { numberFormat: numFmtNum, horizontalAlignment: 'RIGHT' } },
-            { userEnteredValue: { stringValue: '時間' } },
+            { userEnteredFormat: fmtName }, {},
+            { userEnteredValue: { numberValue: month },         userEnteredFormat: fmtMonth },
+            { userEnteredValue: { stringValue: '月' },          userEnteredFormat: fmtUnitMid },
+            { userEnteredValue: { stringValue: '80時間まで' },  userEnteredFormat: fmtLabel10R },
+            { userEnteredValue: { formulaValue: '=80-F1' },     userEnteredFormat: fmtRemain },
+            { userEnteredValue: { stringValue: '時間' },         userEnteredFormat: fmtLabel10R },
           ]},
+          // Row 3: column headers (yellow background)
           { values: [
-            { userEnteredValue: { stringValue: '日付' } },
-            { userEnteredValue: { stringValue: '曜日' } },
-            { userEnteredValue: { stringValue: '勤務' } },
-            { userEnteredValue: { stringValue: '勤務開始前の時間外時間' } },
-            { userEnteredValue: { stringValue: '時間外開始時刻' } },
-            { userEnteredValue: { stringValue: '時間外終了時刻' } },
-            { userEnteredValue: { stringValue: '時間外時間' } },
-          ].map(c => ({ ...c, userEnteredFormat: { textFormat: { bold: true }, horizontalAlignment: 'CENTER', backgroundColor: { red: 0.95, green: 0.93, blue: 0.87 } } })) },
+            { userEnteredValue: { stringValue: '日付' },                  userEnteredFormat: fmtHeader },
+            { userEnteredValue: { stringValue: '曜日' },                  userEnteredFormat: fmtHeader },
+            { userEnteredValue: { stringValue: '勤務' },                  userEnteredFormat: fmtHeader },
+            { userEnteredValue: { stringValue: '勤務開始前の時間外時間' }, userEnteredFormat: fmtHeader },
+            { userEnteredValue: { stringValue: '時間外開始時刻' },         userEnteredFormat: fmtHeader },
+            { userEnteredValue: { stringValue: '時間外終了時刻' },         userEnteredFormat: fmtHeader },
+            { userEnteredValue: { stringValue: '時間外時間' },             userEnteredFormat: fmtHeader },
+          ]},
         ],
         fields: 'userEnteredValue,userEnteredFormat'
       }
     },
+
+    // Data rows 4-34 (date formulas + time formats)
     {
       updateCells: {
         start: { sheetId, rowIndex: 3, columnIndex: 0 },
-        rows: rows4to34,
-        fields: 'userEnteredValue,userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment'
+        rows: dateRows,
+        fields: 'userEnteredValue,userEnteredFormat.numberFormat,userEnteredFormat.horizontalAlignment,userEnteredFormat.verticalAlignment'
       }
     },
+
+    // Row 35: 合計時間外 + SUM
     {
       updateCells: {
         start: { sheetId, rowIndex: 34, columnIndex: 0 },
         rows: [{
           values: [
-            { userEnteredValue: { stringValue: '合計時間外' }, userEnteredFormat: { textFormat: { bold: true } } },
+            { userEnteredValue: { stringValue: '合計時間外' }, userEnteredFormat: fmtTotalLbl },
             {}, {}, {}, {}, {},
-            { userEnteredValue: { formulaValue: '=SUM(G4:G34)' }, userEnteredFormat: { numberFormat: numFmtCum, horizontalAlignment: 'CENTER', textFormat: { bold: true } } },
+            { userEnteredValue: { formulaValue: '=SUM(G4:G34)' }, userEnteredFormat: fmtTotalVal },
           ]
         }],
         fields: 'userEnteredValue,userEnteredFormat'
       }
     },
-    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 60 }, fields: 'pixelSize' } },
-    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 50 }, fields: 'pixelSize' } },
-    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 70 }, fields: 'pixelSize' } },
-    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 180 }, fields: 'pixelSize' } },
-    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 7 }, properties: { pixelSize: 110 }, fields: 'pixelSize' } },
+
+    // Row heights for header rows (taller for size-20 fonts)
+    { updateDimensionProperties: { range: { sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 2 },  properties: { pixelSize: 36 }, fields: 'pixelSize' } },
+    { updateDimensionProperties: { range: { sheetId, dimension: 'ROWS', startIndex: 2, endIndex: 3 },  properties: { pixelSize: 40 }, fields: 'pixelSize' } },
+
+    // Column widths matching original Excel
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 0, endIndex: 1 }, properties: { pixelSize: 62 },  fields: 'pixelSize' } },  // A
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 1, endIndex: 2 }, properties: { pixelSize: 76 },  fields: 'pixelSize' } },  // B
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 2, endIndex: 3 }, properties: { pixelSize: 91 },  fields: 'pixelSize' } },  // C
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 3, endIndex: 4 }, properties: { pixelSize: 107 }, fields: 'pixelSize' } },  // D (wider for label)
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 4, endIndex: 5 }, properties: { pixelSize: 88 },  fields: 'pixelSize' } },  // E
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 88 },  fields: 'pixelSize' } },  // F
+    { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 80 },  fields: 'pixelSize' } },  // G
+
+    // Borders on data table (rows 3-35)
     {
       updateBorders: {
         range: { sheetId, startRowIndex: 2, endRowIndex: 35, startColumnIndex: 0, endColumnIndex: 7 },
-        top: { style: 'SOLID' }, bottom: { style: 'SOLID' }, left: { style: 'SOLID' }, right: { style: 'SOLID' },
-        innerHorizontal: { style: 'SOLID' }, innerVertical: { style: 'SOLID' }
+        top:    { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
+        bottom: { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
+        left:   { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
+        right:  { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
+        innerHorizontal: { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
+        innerVertical:   { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
       }
     },
+
+    // Freeze the header rows (rows 1-3)
+    { updateSheetProperties: { properties: { sheetId, gridProperties: { frozenRowCount: 3 } }, fields: 'gridProperties.frozenRowCount' } },
   ];
 }
 
@@ -2342,7 +2412,52 @@ function changeDoctor() {
   renderDoctorSelect();
 }
 
-/* ================================================== Planned hours editor ================================================== */
+/* ================================================== Reformat existing sheet ================================================== */
+async function reformatCurrentMonthSheet() {
+  if (!isAuthed()) { toast('Google にサインインしてください', 'error'); return; }
+  if (!confirm('今月のスプレッドシートに最新の書式を適用します。\n値はそのまま、見た目だけが更新されます。続けますか?')) return;
+
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  setSyncStatus('busy');
+  try {
+    // Get existing sheet (don't trigger auto-creation)
+    const folderId = await ensureFolder();
+    const sheetName = `${ymKey(y, m)}_${state.currentDoctor}`;
+    let id = state.cache.sheets[ymKey(y, m)] || await findSheetInFolder(folderId, sheetName);
+    if (!id) {
+      toast('今月のシートがまだありません', 'error');
+      setSyncStatus('warn');
+      return;
+    }
+    state.cache.sheets[ymKey(y, m)] = id;
+    saveCache();
+
+    // Read current planned hours so we don't clobber it
+    let plannedHours = 0;
+    try {
+      const r = await sheetsValuesGet(id, 'F1', { valueRenderOption: 'UNFORMATTED_VALUE' });
+      const v = Number(r.values?.[0]?.[0]);
+      if (!isNaN(v)) plannedHours = v;
+    } catch {}
+
+    // Apply the latest template structure
+    await sheetsBatchUpdate(id, buildInitRequests(y, m, state.currentDoctor, plannedHours));
+    // Re-populate 勤務 column from schedule
+    await populateScheduleColumn(id, y, m).catch(() => {});
+
+    setSyncStatus('ok');
+    toast('書式を更新しました', 'success');
+    await refreshTotals();
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('warn');
+    toast('再書式失敗: ' + e.message, 'error');
+  }
+}
+
+
 async function openPlannedHoursEditor() {
   // Need a sheet for current month; create if missing
   const now = new Date();
@@ -2888,6 +3003,7 @@ function bindEvents() {
       case 'change-doctor':       changeDoctor(); break;
       case 'add-manual':          openShiftEditor(null, true); break;
       case 'edit-planned':        openPlannedHoursEditor(); break;
+      case 'reformat-sheet':      reformatCurrentMonthSheet(); break;
       case 'reload-today-shift':  state.scheduleCache = {}; renderTodayShift().catch(() => {}); break;
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
