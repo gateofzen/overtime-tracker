@@ -928,21 +928,6 @@
     </div>
 
     <div class="card">
-      <h2 class="section-title">勤務表データ</h2>
-      <div class="field">
-        <label>取得URL (ベース)</label>
-        <input type="url" id="schedule-base-url" placeholder="https://raw.githubusercontent.com/gateofzen/schedule-storage/main/">
-        <p class="ink-mute" style="font-size:11px;margin-top:6px;">
-          このベースURLに <span class="mono">month_YYYY-MM.json</span> を付けて取得します。<br>
-          例: <span class="mono" id="url-example">…</span>
-        </p>
-      </div>
-      <div class="btn-row">
-        <button class="btn" data-action="save-schedule-url">保存</button>
-      </div>
-    </div>
-
-    <div class="card">
       <h2 class="section-title">位置情報による自動提案</h2>
       <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
         アプリ起動時に病院付近にいる場合、自動的に出勤/退勤を提案します。
@@ -1073,7 +1058,7 @@
 'use strict';
 
 /* ================================================== Constants ================================================== */
-const DOCTORS = ['前川', '提嶋', '遠藤', '小舘', '森木', '中嶋', '上島', '原', '富田'];
+const DOCTORS = ['提嶋', '遠藤', '前川', '小舘', '森木', '中嶋', '福原', '上島', '原', '富田'];
 const DEFAULT_SCHEDULE_URL = 'https://raw.githubusercontent.com/gateofzen/schedule-storage/main/';
 const DEFAULT_CLIENT_ID = ''; // Edit this line to embed a default Client ID
 
@@ -1095,7 +1080,7 @@ const state = {
   currentDoctor: null,
   currentView: 'select',
   shifts: [],          // [{id, clockIn, clockOut, syncedSheetIds:[]}]
-  settings: { scheduleBaseUrl: DEFAULT_SCHEDULE_URL, clientId: DEFAULT_CLIENT_ID },
+  settings: { clientId: DEFAULT_CLIENT_ID, geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 },
   cache: { folderId: null, sheets: {} }, // sheets: {"2026-05": "spreadsheetId"}
   scheduleCache: {},   // {"2026-05": {data}}
   auth: {
@@ -1118,7 +1103,6 @@ function storageSet(key, val) { try { localStorage.setItem(key, JSON.stringify(v
 function loadSettings() {
   const s = storageGet(STORAGE_KEYS.settings, null);
   state.settings = {
-    scheduleBaseUrl: (s?.scheduleBaseUrl) || DEFAULT_SCHEDULE_URL,
     clientId:        (s?.clientId)        || DEFAULT_CLIENT_ID,
     geoEnabled:      !!(s?.geoEnabled),
     hospitalLat:     (s?.hospitalLat)     || null,
@@ -1498,10 +1482,8 @@ function shiftFromSchedule(date, doctor, sched) {
 async function fetchSchedule(year, month) {
   const key = ymKey(year, month);
   if (state.scheduleCache[key]) return state.scheduleCache[key];
-  const base = (state.settings.scheduleBaseUrl || '').trim();
-  if (!base) throw new Error('勤務表URLが未設定');
-  const sep = base.endsWith('/') ? '' : '/';
-  const url = `${base}${sep}month_${key}.json`;
+  const sep = DEFAULT_SCHEDULE_URL.endsWith('/') ? '' : '/';
+  const url = `${DEFAULT_SCHEDULE_URL}${sep}month_${key}.json`;
   const res = await fetch(url, { cache: 'no-cache' });
   if (!res.ok) throw new Error(`勤務表取得失敗 (${res.status})`);
   const data = await res.json();
@@ -2045,10 +2027,8 @@ function showView(name) {
   if (name === 'monthly') renderMonthly();
   if (name === 'settings') {
     document.getElementById('client-id-input').value = state.settings.clientId || '';
-    document.getElementById('schedule-base-url').value = state.settings.scheduleBaseUrl || '';
     document.getElementById('geo-enabled').checked = !!state.settings.geoEnabled;
     document.getElementById('geo-radius').value = state.settings.geoRadius || 150;
-    updateUrlExample();
     updateGeoStatus();
     updateShortcutUrls();
   }
@@ -2079,12 +2059,6 @@ function changeDoctor() {
 }
 
 /* ================================================== Settings actions ================================================== */
-function updateUrlExample() {
-  const base = (document.getElementById('schedule-base-url').value || state.settings.scheduleBaseUrl || '').trim();
-  const ex = base ? (base.endsWith('/') ? base : base + '/') + 'month_2026-05.json' : '(未設定)';
-  document.getElementById('url-example').textContent = ex;
-}
-
 function handleSaveClientId() {
   state.settings.clientId = document.getElementById('client-id-input').value.trim();
   saveSettings();
@@ -2094,14 +2068,6 @@ function handleSaveClientId() {
   state.auth.expiresAt = 0;
   toast('保存しました。再度サインインしてください', 'success');
   setSyncStatus('offline');
-}
-
-function handleSaveScheduleUrl() {
-  state.settings.scheduleBaseUrl = document.getElementById('schedule-base-url').value.trim();
-  saveSettings();
-  state.scheduleCache = {};
-  toast('保存しました', 'success');
-  updateUrlExample();
 }
 
 /* ================================================== Auth flow ================================================== */
@@ -2180,7 +2146,7 @@ function clearAllData() {
   state.currentDoctor = null;
   state.shifts = [];
   state.cache = { folderId: null, sheets: {} };
-  state.settings = { scheduleBaseUrl: DEFAULT_SCHEDULE_URL, clientId: DEFAULT_CLIENT_ID };
+  state.settings = { clientId: DEFAULT_CLIENT_ID, geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 };
   signOut();
   toast('削除しました', 'success');
   changeDoctor();
@@ -2551,7 +2517,6 @@ function bindEvents() {
       case 'signin':              startSignIn(); break;
       case 'signout':             signOut(); break;
       case 'save-client-id':      handleSaveClientId(); break;
-      case 'save-schedule-url':   handleSaveScheduleUrl(); break;
       case 'export-data':         exportData(); break;
       case 'import-data':         document.getElementById('import-file').click(); break;
       case 'clear-data':          clearAllData(); break;
@@ -2567,7 +2532,6 @@ function bindEvents() {
       case 'splash-open-app':     hideAutoSplash(); showView('clock'); refreshTotals().catch(() => {}); break;
     }
   });
-  document.getElementById('schedule-base-url').addEventListener('input', updateUrlExample);
   document.getElementById('import-file').addEventListener('change', (e) => {
     if (e.target.files[0]) importData(e.target.files[0]);
   });
