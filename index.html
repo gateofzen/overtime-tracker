@@ -1604,6 +1604,8 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 
   const colorBlue   = { red: 0.851, green: 0.886, blue: 0.953 }; // #D9E2F3
   const colorPeach  = { red: 0.969, green: 0.792, blue: 0.675 }; // #F7CAAC
   const colorYellow = { red: 1.0,   green: 0.898, blue: 0.596 }; // #FFE598
+  const colorOrange40 = { red: 0.988, green: 0.894, blue: 0.839 }; // #FCE4D6 (Orange Accent 6 Lighter 40%)
+  const colorRed    = { red: 1.0,   green: 0.0,   blue: 0.0   }; // #FF0000
   const colorWhite  = { red: 1.0,   green: 1.0,   blue: 1.0   };
 
   // ---------- Reusable formats ----------
@@ -1620,8 +1622,8 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 
   const fmtDow     = { numberFormat: numFmtDow,  horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' };
   const fmtShift   = { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' };
   const fmtTimeC   = { numberFormat: numFmtTime, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE' };
-  const fmtTotalLbl= { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { bold: true, fontSize: 11 } };
-  const fmtTotalVal= { numberFormat: numFmtCum, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { bold: true, fontSize: 11 } };
+  const fmtTotalLbl= { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { bold: true, fontSize: 18 } };
+  const fmtTotalVal= { numberFormat: numFmtCum, horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { bold: true, fontSize: 18, foregroundColor: colorRed }, backgroundColor: colorOrange40 };
 
   // ---------- Date rows (4..34) ----------
   const dateRows = [];
@@ -1649,11 +1651,15 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 
     // Rename sheet to YYYY-MM
     { updateSheetProperties: { properties: { sheetId, title: ymKey(year, month) }, fields: 'title' } },
 
-    // Unmerge any existing merges in A1:B1 area first (prevents merge conflict on reformat)
+    // Unmerge any existing merges first (prevents merge conflict on reformat)
     { unmergeCells: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 2 } } },
+    { unmergeCells: { range: { sheetId, startRowIndex: 34, endRowIndex: 35, startColumnIndex: 0, endColumnIndex: 2 } } },
 
     // Merge A1:B1 (name area)
     { mergeCells: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 2 }, mergeType: 'MERGE_ALL' } },
+
+    // Merge A35:B35 (total row label)
+    { mergeCells: { range: { sheetId, startRowIndex: 34, endRowIndex: 35, startColumnIndex: 0, endColumnIndex: 2 }, mergeType: 'MERGE_ALL' } },
 
     // Header rows 1-3
     {
@@ -1731,16 +1737,40 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 
     { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 5, endIndex: 6 }, properties: { pixelSize: 88 },  fields: 'pixelSize' } },  // F
     { updateDimensionProperties: { range: { sheetId, dimension: 'COLUMNS', startIndex: 6, endIndex: 7 }, properties: { pixelSize: 80 },  fields: 'pixelSize' } },  // G
 
-    // Borders on data table (rows 3-35)
+    // Borders on data table (rows 3-34 only, NOT on total row 35)
     {
       updateBorders: {
-        range: { sheetId, startRowIndex: 2, endRowIndex: 35, startColumnIndex: 0, endColumnIndex: 7 },
+        range: { sheetId, startRowIndex: 2, endRowIndex: 34, startColumnIndex: 0, endColumnIndex: 7 },
         top:    { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
         bottom: { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
         left:   { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
         right:  { style: 'SOLID', color: { red: 0.6, green: 0.6, blue: 0.6 } },
         innerHorizontal: { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
         innerVertical:   { style: 'SOLID', color: { red: 0.7, green: 0.7, blue: 0.7 } },
+      }
+    },
+
+    // Clear any pre-existing borders on row 35 (total row should have NO borders by default)
+    {
+      updateBorders: {
+        range: { sheetId, startRowIndex: 34, endRowIndex: 35, startColumnIndex: 0, endColumnIndex: 7 },
+        top:    { style: 'NONE' },
+        bottom: { style: 'NONE' },
+        left:   { style: 'NONE' },
+        right:  { style: 'NONE' },
+        innerHorizontal: { style: 'NONE' },
+        innerVertical:   { style: 'NONE' },
+      }
+    },
+
+    // Red thick border around G35 only (the total value cell)
+    {
+      updateBorders: {
+        range: { sheetId, startRowIndex: 34, endRowIndex: 35, startColumnIndex: 6, endColumnIndex: 7 },
+        top:    { style: 'SOLID_THICK', color: colorRed },
+        bottom: { style: 'SOLID_THICK', color: colorRed },
+        left:   { style: 'SOLID_THICK', color: colorRed },
+        right:  { style: 'SOLID_THICK', color: colorRed },
       }
     },
 
@@ -2542,10 +2572,6 @@ function openShiftEditor(id, isNew = false) {
     return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
-  const today     = formatDateKey(new Date());
-  const yesterday = formatDateKey(addDays(new Date(), -1));
-  const dayBefore = formatDateKey(addDays(new Date(), -2));
-
   showModal(`
     <h3>${isNew ? '打刻を手動追加' : '打刻を編集'}</h3>
     <div class="field">
@@ -2554,11 +2580,6 @@ function openShiftEditor(id, isNew = false) {
         <input type="date" id="edit-in-date" value="${dateValue(shift.clockIn)}">
         <input type="time" id="edit-in-time" value="${timeValue(shift.clockIn)}" step="60">
       </div>
-      <div class="quick-dates" data-target="edit-in-date">
-        <button type="button" data-quick-date="${today}">今日</button>
-        <button type="button" data-quick-date="${yesterday}">昨日</button>
-        <button type="button" data-quick-date="${dayBefore}">一昨日</button>
-      </div>
     </div>
     <div class="field">
       <label>退勤日時 (空欄=未退勤)</label>
@@ -2566,26 +2587,12 @@ function openShiftEditor(id, isNew = false) {
         <input type="date" id="edit-out-date" value="${dateValue(shift.clockOut)}">
         <input type="time" id="edit-out-time" value="${timeValue(shift.clockOut)}" step="60">
       </div>
-      <div class="quick-dates" data-target="edit-out-date">
-        <button type="button" data-quick-date="${today}">今日</button>
-        <button type="button" data-quick-date="${yesterday}">昨日</button>
-        <button type="button" data-quick-date="${dayBefore}">一昨日</button>
-      </div>
     </div>
     <div class="modal-actions">
       <button class="btn outline" data-modal-close>キャンセル</button>
       <button class="btn" id="modal-save">保存して同期</button>
     </div>
   `);
-
-  // Bind quick-date buttons
-  document.querySelectorAll('.quick-dates button').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const target = e.currentTarget.closest('.quick-dates').dataset.target;
-      const date = e.currentTarget.dataset.quickDate;
-      document.getElementById(target).value = date;
-    });
-  });
 
   document.getElementById('modal-save').addEventListener('click', async () => {
     const inDate  = document.getElementById('edit-in-date').value;
