@@ -2371,6 +2371,56 @@ async function deleteShiftAction(id) {
   toast('削除しました', 'success');
 }
 
+async function undoClockOutAction(id) {
+  const session = state.shifts.find(s => s.id === id);
+  if (!session || !session.clockOut) return;
+  if (!confirm('退勤の打刻を取り消して、出勤中の状態に戻しますか?\nスプレッドシートの退勤時刻もクリアされます。')) return;
+
+  setSyncStatus('busy');
+  try {
+    // Clear E and F columns on the appropriate row(s)
+    if (isAuthed() && session.syncedSheetIds?.length) {
+      const ci = new Date(session.clockIn);
+      const co = new Date(session.clockOut);
+
+      // Determine which row had E/F written
+      // Match the logic in syncClockOut: 夜勤/25勤 → next day's row, 日勤 → same day's row
+      // Use schedule (or sheet C value) if possible; otherwise use duration heuristic
+      let targetDates = new Set();
+      // Always try clearing both same day and next day's E/F to be safe
+      targetDates.add(ci.getDate());
+      const nextDay = addDays(ci, 1);
+      targetDates.add(nextDay.getDate());
+      // For each sheet ID, clear E and F on candidate rows
+      for (const spreadsheetId of session.syncedSheetIds) {
+        const updates = [];
+        // Compute target row: heuristic or both
+        const hours = (co - ci) / 3600000;
+        let primaryDate = ci;
+        if (hours > 16) primaryDate = nextDay;
+        const row = primaryDate.getDate() + 3;
+        updates.push({ range: `E${row}`, values: [['']] });
+        updates.push({ range: `F${row}`, values: [['']] });
+        try {
+          await sheetsValuesBatchUpdate(spreadsheetId, updates);
+        } catch (e) { console.warn('undo sync:', e); }
+      }
+    }
+
+    // Update local state: clear clockOut so getOpenShift() returns this session again
+    session.clockOut = null;
+    saveShifts();
+    setSyncStatus('ok');
+    renderClock();
+    await refreshTotals();
+    toast('退勤を取り消しました', 'success');
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('warn');
+    toast('取消失敗: ' + e.message, 'error');
+  }
+}
+
 async function resyncAll() {
   setSyncStatus('busy');
   let count = 0;
@@ -2462,7 +2512,8 @@ function renderShiftsList(limit = null) {
       <div class="time"><span class="label-tiny">退勤</span>${co ? formatTime(co) + (formatDateKey(ci) !== formatDateKey(co) ? ' <span style="font-size:9px;color:var(--ink-mute)">(翌)</span>' : '') : '<span style="color:var(--ink-mute)">未</span>'}</div>
       <div class="actions">
         <button class="icon-btn" data-edit-shift="${s.id}">編集</button>
-        <button class="icon-btn danger" data-del-shift="${s.id}">削除</button>
+        ${co ? `<button class="icon-btn" data-undo-shift="${s.id}" title="退勤を取り消して出勤中に戻す">↶ 退勤取消</button>` : ''}
+        <button class="icon-btn danger" data-del-shift="${s.id}" title="この打刻全体を削除">削除</button>
       </div>
     `;
     wrap.appendChild(row);
@@ -2471,10 +2522,13 @@ function renderShiftsList(limit = null) {
 
   list.querySelectorAll('[data-del-shift]').forEach(b => {
     b.addEventListener('click', async () => {
-      if (confirm('この打刻を削除しますか? (スプレッドシートからも削除されます)')) {
+      if (confirm('この打刻全体 (出勤・退勤の両方) を削除しますか?\nスプレッドシートからも削除されます。\n\n※退勤だけを取り消したい場合は「退勤取消」ボタンを使ってください。')) {
         await deleteShiftAction(b.dataset.delShift);
       }
     });
+  });
+  list.querySelectorAll('[data-undo-shift]').forEach(b => {
+    b.addEventListener('click', () => undoClockOutAction(b.dataset.undoShift));
   });
   list.querySelectorAll('[data-edit-shift]').forEach(b => {
     b.addEventListener('click', () => openShiftEditor(b.dataset.editShift));
