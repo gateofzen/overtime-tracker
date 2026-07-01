@@ -665,11 +665,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 14px 16px;
-    text-decoration: none;
     color: inherit;
-  }
-  .month-card .month-main:hover {
-    background: var(--paper-soft);
   }
   .month-card .month-actions {
     display: flex;
@@ -2815,40 +2811,39 @@ async function renderMonthly() {
       const card = document.createElement('div');
       card.className = 'month-card' + (isCurrent ? ' current' : '');
 
-      // Main row (clickable if time-sheet exists — opens it)
-      const mainRow = document.createElement(timeSheet ? 'a' : 'div');
+      // Main row: information only (no click). Actions are dedicated buttons below.
+      const mainRow = document.createElement('div');
       mainRow.className = 'month-main';
-      if (timeSheet) {
-        const urls = buildSheetUrls(timeSheet.id);
-        mainRow.href = urls.appUrl;
-        mainRow.target = '_blank';
-        mainRow.rel = 'noopener';
-      }
       mainRow.innerHTML = `
         <div class="month-label">${key}<small>${formatWeekday(new Date(key + '-01'))}スタート</small></div>
         <div class="month-total">${total}</div>
       `;
       card.appendChild(mainRow);
 
-      // Sub-actions: attendance sheet edit / PDF, or "create" if not yet made
+      // Sub-actions: time sheet + attendance sheet + PDF + recreate/create
       const actions = document.createElement('div');
       actions.className = 'month-actions';
+      const actionsHtml = [];
+
+      if (timeSheet) {
+        const tsUrls = buildSheetUrls(timeSheet.id);
+        actionsHtml.push(`<a href="${tsUrls.appUrl}" target="_blank" rel="noopener">📊 時間外管理を編集</a>`);
+      }
+
       if (attendance) {
         const editUrl = `https://docs.google.com/spreadsheets/d/${attendance.id}/edit`;
         const pdfUrl = `https://docs.google.com/spreadsheets/d/${attendance.id}/export?format=pdf`
           + `&size=A4&portrait=true&scale=4&fitw=true&fith=true`
           + `&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false&horizontal_alignment=CENTER&vertical_alignment=MIDDLE`
           + `&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3`;
-        actions.innerHTML = `
-          <a href="${editUrl}" target="_blank" rel="noopener">📝 出勤簿を編集</a>
-          <a href="${pdfUrl}" target="_blank" rel="noopener">📄 出勤簿PDF</a>
-          <button data-action="recreate-attendance" data-key="${key}">🔄 再作成</button>
-        `;
+        actionsHtml.push(`<a href="${editUrl}" target="_blank" rel="noopener">📝 出勤簿を編集</a>`);
+        actionsHtml.push(`<a href="${pdfUrl}" target="_blank" rel="noopener">📄 出勤簿PDF</a>`);
+        actionsHtml.push(`<button data-action="recreate-attendance" data-key="${key}">🔄 出勤簿を再作成</button>`);
       } else {
-        actions.innerHTML = `
-          <button data-action="create-attendance" data-key="${key}">📋 出勤簿を作成</button>
-        `;
+        actionsHtml.push(`<button data-action="create-attendance" data-key="${key}">📋 出勤簿を作成</button>`);
       }
+
+      actions.innerHTML = actionsHtml.join('');
       card.appendChild(actions);
 
       list.appendChild(card);
