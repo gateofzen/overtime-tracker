@@ -650,6 +650,82 @@
     margin-right: 6px;
     vertical-align: middle;
   }
+  /* Month card group: contains the main row + attendance sub-actions */
+  .month-card {
+    background: var(--paper);
+    border: 1px solid var(--line-soft);
+    margin-bottom: 8px;
+    transition: all 0.15s;
+  }
+  .month-card.current {
+    border-color: var(--terracotta);
+  }
+  .month-card .month-main {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    text-decoration: none;
+    color: inherit;
+  }
+  .month-card .month-main:hover {
+    background: var(--paper-soft);
+  }
+  .month-card .month-actions {
+    display: flex;
+    gap: 6px;
+    padding: 0 16px 12px;
+    flex-wrap: wrap;
+  }
+  .month-card .month-actions a,
+  .month-card .month-actions button {
+    font-family: var(--sans);
+    font-size: 11px;
+    padding: 5px 10px;
+    background: transparent;
+    color: var(--ink-soft);
+    border: 1px solid var(--line-soft);
+    border-radius: 3px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+  .month-card .month-actions a:hover,
+  .month-card .month-actions button:hover {
+    background: var(--paper-soft);
+    border-color: var(--ink-soft);
+    color: var(--ink);
+  }
+  .month-card.current .month-label::before {
+    content: '今月';
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    background: var(--terracotta);
+    color: var(--paper);
+    padding: 2px 6px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .month-card .month-label {
+    font-family: var(--serif);
+    font-size: 17px;
+  }
+  .month-card .month-label small {
+    display: block;
+    font-family: var(--sans);
+    font-size: 10px;
+    color: var(--ink-mute);
+    letter-spacing: 0.1em;
+    margin-top: 2px;
+  }
+  .month-card .month-total {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 500;
+  }
 
   /* ================================================== Forms ================================================== */
   .field { margin-bottom: 14px; }
@@ -2690,35 +2766,92 @@ async function renderMonthly() {
   try {
     const folderId = await ensureFolder();
     const files = await listMonthlySheets(folderId);
-    const myFiles = files.filter(f => f.name.endsWith(`_${state.currentDoctor}`));
-    if (myFiles.length === 0) {
+    const doctor = state.currentDoctor;
+
+    // Split into two types by name pattern
+    //   - Time-sheet:      YYYY-MM_医師名
+    //   - Attendance sheet: 出勤簿_YYYY-MM_医師名
+    const monthMap = {};
+    for (const f of files) {
+      if (!f.name.endsWith(`_${doctor}`)) continue;
+      const attMatch = f.name.match(/^出勤簿_(\d{4}-\d{2})_/);
+      const tsMatch = f.name.match(/^(\d{4}-\d{2})_/);
+      if (attMatch) {
+        const key = attMatch[1];
+        monthMap[key] = monthMap[key] || {};
+        monthMap[key].attendance = f;
+      } else if (tsMatch) {
+        const key = tsMatch[1];
+        monthMap[key] = monthMap[key] || {};
+        monthMap[key].timeSheet = f;
+      }
+    }
+
+    const keys = Object.keys(monthMap).sort().reverse();
+    if (keys.length === 0) {
       list.innerHTML = '<p class="empty-state">まだスプレッドシートが作成されていません</p>';
       return;
     }
+
     list.innerHTML = '';
     const now = new Date();
     const currentKey = ymKey(now.getFullYear(), now.getMonth() + 1);
-    for (const f of myFiles) {
-      const m = f.name.match(/^(\d{4}-\d{2})_/);
-      if (!m) continue;
-      const key = m[1];
-      // Update cache
-      state.cache.sheets[key] = f.id;
-      // Read total
-      let total = '?';
-      try { total = await readMonthTotal(f.id); } catch {}
+
+    for (const key of keys) {
+      const { timeSheet, attendance } = monthMap[key];
       const isCurrent = key === currentKey;
-      const row = document.createElement('a');
-      row.className = 'month-row' + (isCurrent ? ' current' : '');
-      const urls = buildSheetUrls(f.id);
-      row.href = urls.appUrl;
-      row.target = '_blank';
-      row.rel = 'noopener';
-      row.innerHTML = `
+
+      // Update cache from time-sheet id
+      if (timeSheet) state.cache.sheets[key] = timeSheet.id;
+
+      // Total hours from time-sheet
+      let total = '?';
+      if (timeSheet) {
+        try { total = await readMonthTotal(timeSheet.id); } catch {}
+      } else {
+        total = '—';
+      }
+
+      const card = document.createElement('div');
+      card.className = 'month-card' + (isCurrent ? ' current' : '');
+
+      // Main row (clickable if time-sheet exists — opens it)
+      const mainRow = document.createElement(timeSheet ? 'a' : 'div');
+      mainRow.className = 'month-main';
+      if (timeSheet) {
+        const urls = buildSheetUrls(timeSheet.id);
+        mainRow.href = urls.appUrl;
+        mainRow.target = '_blank';
+        mainRow.rel = 'noopener';
+      }
+      mainRow.innerHTML = `
         <div class="month-label">${key}<small>${formatWeekday(new Date(key + '-01'))}スタート</small></div>
         <div class="month-total">${total}</div>
       `;
-      list.appendChild(row);
+      card.appendChild(mainRow);
+
+      // Sub-actions: attendance sheet edit / PDF, or "create" if not yet made
+      const actions = document.createElement('div');
+      actions.className = 'month-actions';
+      if (attendance) {
+        const editUrl = `https://docs.google.com/spreadsheets/d/${attendance.id}/edit`;
+        const pdfUrl = `https://docs.google.com/spreadsheets/d/${attendance.id}/export?format=pdf`
+          + `&size=A4&portrait=true&scale=4&fitw=true&fith=true`
+          + `&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false&horizontal_alignment=CENTER&vertical_alignment=MIDDLE`
+          + `&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3`;
+        actions.innerHTML = `
+          <a href="${editUrl}" target="_blank" rel="noopener">📝 出勤簿を編集</a>
+          <a href="${pdfUrl}" target="_blank" rel="noopener">📄 出勤簿PDF</a>
+          <button data-action="recreate-attendance" data-key="${key}">🔄 再作成</button>
+        `;
+      } else {
+        actions.innerHTML = `
+          <button data-action="create-attendance" data-key="${key}">📋 出勤簿を作成</button>
+        `;
+      }
+      card.appendChild(actions);
+
+      list.appendChild(card);
     }
     saveCache();
   } catch (e) {
@@ -2898,6 +3031,41 @@ async function syncShiftLogBidirectional() {
     }
   } catch (e) {
     console.warn('bidirectional sync failed:', e);
+  }
+}
+
+// Called from the monthly view "Create/Recreate attendance" buttons
+async function createAttendanceFromMonthly(year, month) {
+  if (!isAuthed()) { toast('先に Google にサインインしてください', 'error'); return; }
+  setSyncStatus('busy');
+  toast('作成中... しばらくお待ちください', 'info');
+  try {
+    const result = await createAttendanceSheet(year, month);
+    setSyncStatus('ok');
+    if (result) {
+      const pdfUrl = `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/export?format=pdf`
+        + `&size=A4&portrait=true&scale=4&fitw=true&fith=true`
+        + `&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false&horizontal_alignment=CENTER&vertical_alignment=MIDDLE`
+        + `&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3`;
+      const editUrl = `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit`;
+      showModal(`
+        <h3>出勤簿を作成しました ✓</h3>
+        <p style="margin:10px 0 14px;">
+          <strong>${result.sheetName}</strong> を「時間外勤務」フォルダ内に作成しました。
+        </p>
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
+          <a class="btn" href="${pdfUrl}" target="_blank" rel="noopener" data-modal-close>📄 印刷用PDFを開く (A4縦)</a>
+          <a class="btn outline" href="${editUrl}" target="_blank" rel="noopener" data-modal-close>📝 編集画面を開く</a>
+          <button class="btn outline" data-modal-close>閉じる</button>
+        </div>
+      `);
+      // Refresh the monthly list to show the new attendance sheet actions
+      renderMonthly();
+    }
+  } catch (e) {
+    console.error(e);
+    setSyncStatus('warn');
+    toast('作成失敗: ' + e.message, 'error');
   }
 }
 
@@ -4481,6 +4649,15 @@ function bindEvents() {
       case 'edit-shifts':         openShiftScheduleEditor(); break;
       case 'reformat-sheet':      reformatCurrentMonthSheet(); break;
       case 'print-attendance':    openPrintAttendance(); break;
+      case 'create-attendance':
+      case 'recreate-attendance': {
+        const key = e.target.closest('[data-action]').dataset.key;
+        if (key) {
+          const [y, m] = key.split('-').map(Number);
+          createAttendanceFromMonthly(y, m);
+        }
+        break;
+      }
       case 'upload-shift-log':    handleUploadShiftLog(); break;
       case 'download-shift-log':  handleDownloadShiftLog(); break;
       case 'reload-today-shift':  state.scheduleCache = {}; renderTodayShift().catch(() => {}); break;
