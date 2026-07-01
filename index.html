@@ -3611,6 +3611,22 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
     }
   });
 
+  // Helper to convert 'HH:MM' string to a day-fraction number (for TIME-formatted cells).
+  // Writing time as numeric+TIME format ensures the conditional-formatting formula
+  // can compare COLUMN()*10/1440 against $D/$E directly without TIMEVALUE conversion.
+  const timeToFraction = (hm) => {
+    if (!hm) return null;
+    const m = String(hm).match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return (parseInt(m[1]) * 60 + parseInt(m[2])) / 1440;
+  };
+  const timeNumFmt = { type: 'TIME', pattern: 'h:mm' };
+  const timeCellFmt = {
+    horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+    textFormat: { fontSize: 13, bold: true },
+    numberFormat: timeNumFmt
+  };
+
   // 6. Day rows (row 4..34)
   const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
   const dayRowsCells = [];
@@ -3635,12 +3651,15 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
       backgroundColor: d.checkType ? dayColor[d.checkType] : white
     };
 
+    const startFrac = timeToFraction(d.startTime);
+    const endFrac = timeToFraction(d.endTime);
+
     const rowCells = [
       { userEnteredValue: { numberValue: day }, userEnteredFormat: { ...rowFmtBase, textFormat: { fontSize: 10, bold: true } } },
       { userEnteredValue: { stringValue: wd }, userEnteredFormat: wdFmt },
       { userEnteredValue: { stringValue: d.checkType || '' }, userEnteredFormat: typeFmt },
-      { userEnteredValue: d.startTime ? { stringValue: d.startTime } : {}, userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 13, bold: true } } },
-      { userEnteredValue: d.endTime ? { stringValue: d.endTime } : {}, userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 13, bold: true } } },
+      { userEnteredValue: startFrac !== null ? { numberValue: startFrac } : {}, userEnteredFormat: timeCellFmt },
+      { userEnteredValue: endFrac !== null ? { numberValue: endFrac } : {}, userEnteredFormat: timeCellFmt },
     ];
     for (let s = 0; s < SUB_COUNT; s++) {
       rowCells.push({
@@ -3665,7 +3684,7 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
     updateCells: {
       rows: dayRowsCells,
       range: { sheetId, startRowIndex: 3, endRowIndex: 3 + daysInMonth, startColumnIndex: 0, endColumnIndex: totalCols },
-      fields: 'userEnteredValue,userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat,backgroundColor)'
+      fields: 'userEnteredValue,userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat,backgroundColor,numberFormat)'
     }
   });
 
@@ -3720,23 +3739,21 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
   });
 
   // 9. Conditional formatting: automatically color subcells pink based on the
-  // start/end time values in columns D and E, so that manual time edits update
-  // the coloring in real time.
-  // Formula (evaluated on top-left cell F4, applied relatively):
-  //   AND(
-  //     OR($D4<>"", $E4<>""),  // at least one time present
-  //     IFERROR((COLUMN()-6)*10/1440 >= TIMEVALUE($D4), TRUE),  // slot >= start
-  //     IFERROR((COLUMN()-6)*10/1440 <  TIMEVALUE($E4), TRUE)   // slot <  end
-  //   )
-  // Notes:
-  //   - COLUMN() is 1-indexed; F is column 6, so (COLUMN()-6)*10 gives slot start in minutes.
-  //   - Dividing by 1440 (minutes/day) makes it comparable to TIMEVALUE (day fraction).
-  //   - IFERROR handles empty D or E (夜勤日/明け日) by treating the missing bound as unbounded.
+  // start/end time values in columns D and E. Manual time edits update instantly.
+  //
+  // D and E are stored as numeric day-fractions with TIME formatting, so we can
+  // compare directly without TIMEVALUE conversion:
+  //   slotFraction = (COLUMN() - 6) * 10 / 1440   ← "F" column is COLUMN() = 6
+  //
+  // Handling of blank cells (夜勤日/明け日/週休日):
+  //   - IF($D4="", ...) uses TRUE as unbounded lower bound
+  //   - IF($E4="", ...) uses TRUE as unbounded upper bound
+  //   - OR($D4<>"", $E4<>"") ensures fully blank rows (週休日) are not colored
   const formula =
     '=AND(' +
       'OR($D4<>"",$E4<>""),' +
-      'IFERROR((COLUMN()-6)*10/1440>=TIMEVALUE($D4),TRUE),' +
-      'IFERROR((COLUMN()-6)*10/1440<TIMEVALUE($E4),TRUE)' +
+      'IF($D4="",TRUE,(COLUMN()-6)*10/1440>=$D4),' +
+      'IF($E4="",TRUE,(COLUMN()-6)*10/1440<$E4)' +
     ')';
   requests.push({
     addConditionalFormatRule: {
