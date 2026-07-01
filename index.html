@@ -3191,6 +3191,39 @@ async function computeAttendanceData(year, month) {
     }
   }
 
+  // 4. Post-processing: fill in official end times for shifts where end time
+  // could not be reconstructed (e.g., doctor clocked out before the official end
+  // time so nothing was written to F column, or clock-out happened on another device).
+  // Only apply for days up to today — future days are still to come.
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const targetDate = new Date(year, month - 1, day);
+    if (targetDate > today) continue;
+    const d = data[day];
+
+    // 明け日 with no end time → prior day was 夜勤/25勤 → fill 09:30 end
+    if (d.checkType === '明け日' && !d.endTime) {
+      const prevType = scheduleMap[day - 1];
+      if (prevType === '夜勤' || prevType === '25勤') {
+        d.endTime = '09:30';
+        for (let h = 0; h < 10; h++) d.workHours.add(h);
+      }
+    }
+
+    // 日勤日 with a start but no end → fill 17:30 end
+    if (d.checkType === '日勤日' && d.startTime && !d.endTime) {
+      const startMin = parseHM(d.startTime);
+      if (startMin !== null) {
+        d.endTime = '17:30';
+        const endMin = 17 * 60 + 30;
+        for (let h = 0; h < 24; h++) {
+          if ((h + 1) * 60 > startMin && h * 60 < endMin) d.workHours.add(h);
+        }
+      }
+    }
+  }
+
   return data;
 }
 
