@@ -1298,6 +1298,18 @@
     </div>
 
     <div class="card">
+      <h2 class="section-title">打刻ログの同期</h2>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        打刻データ (出勤/退勤時刻) を Google ドライブに保存し、他のデバイスと共有します。
+        アプリ起動時や打刻時に自動的に同期されますが、うまく同期されていないと思ったら手動実行してください。
+      </p>
+      <div class="btn-row">
+        <button class="btn outline" data-action="upload-shift-log">Drive に保存</button>
+        <button class="btn outline" data-action="download-shift-log">Drive から復元</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2 class="section-title">データ管理</h2>
       <div class="btn-row">
         <button class="btn outline" data-action="export-data">エクスポート</button>
@@ -1567,6 +1579,127 @@ async function listMonthlySheets(folderId) {
   const q = encodeURIComponent(`'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`);
   const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=name desc&pageSize=24`);
   return r.files || [];
+}
+
+/* ================================================== Shift log sync (Drive) ================================================== */
+// Saves the local state.shifts array as a JSON file in the 時間外勤務 folder,
+// so devices other than the one that did the clock-in can restore accurate times.
+// File name: 打刻ログ_{doctor}.json
+
+function shiftLogFileName() {
+  return `打刻ログ_${state.currentDoctor}.json`;
+}
+
+async function findShiftLogFile(folderId) {
+  const name = shiftLogFileName();
+  const q = encodeURIComponent(`name='${name}' and '${folderId}' in parents and trashed=false`);
+  const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  return r.files?.[0]?.id || null;
+}
+
+// Multipart upload of a JSON file to Drive (create if existingId is null, else update)
+async function uploadShiftLogFile(folderId, existingId, jsonContent) {
+  const token = await ensureToken();
+  const metadata = existingId
+    ? { name: shiftLogFileName() }
+    : { name: shiftLogFileName(), mimeType: 'application/json', parents: [folderId] };
+  const boundary = '-------shiftlog' + Math.random().toString(36).slice(2);
+  const body =
+    `--${boundary}\r\n` +
+    `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify(metadata) + '\r\n' +
+    `--${boundary}\r\n` +
+    `Content-Type: application/json\r\n\r\n` +
+    jsonContent + '\r\n' +
+    `--${boundary}--`;
+  const url = existingId
+    ? `https://www.googleapis.com/upload/drive/v3/files/${existingId}?uploadType=multipart`
+    : `https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart`;
+  const method = existingId ? 'PATCH' : 'POST';
+  const res = await fetch(url, {
+    method,
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`
+    },
+    body
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Drive upload ${res.status}: ${text.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+// Download JSON content by fileId
+async function downloadShiftLogContent(fileId) {
+  const token = await ensureToken();
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+  if (!res.ok) throw new Error(`Drive download ${res.status}`);
+  return res.json();
+}
+
+async function uploadShiftLog() {
+  if (!isAuthed() || !state.currentDoctor) return;
+  const folderId = await ensureFolder();
+  const existingId = await findShiftLogFile(folderId);
+  const content = JSON.stringify({
+    doctor: state.currentDoctor,
+    updatedAt: new Date().toISOString(),
+    shifts: state.shifts,
+  }, null, 2);
+  await uploadShiftLogFile(folderId, existingId, content);
+}
+
+async function downloadShiftLog() {
+  if (!isAuthed() || !state.currentDoctor) return null;
+  const folderId = await ensureFolder();
+  const fileId = await findShiftLogFile(folderId);
+  if (!fileId) return null;
+  return await downloadShiftLogContent(fileId);
+}
+
+// Merge two shift arrays by id. Remote wins if newer (based on updatedAt if present,
+// else clockOut/clockIn timestamps).
+function mergeShifts(local, remote) {
+  const timeOf = (s) => new Date(s.updatedAt || s.clockOut || s.clockIn || 0).getTime();
+  const byId = new Map();
+  for (const s of local) byId.set(s.id, s);
+  for (const s of remote) {
+    const existing = byId.get(s.id);
+    if (!existing || timeOf(s) > timeOf(existing)) byId.set(s.id, s);
+  }
+  return Array.from(byId.values()).sort((a, b) => new Date(a.clockIn) - new Date(b.clockIn));
+}
+
+async function loadShiftsFromDrive() {
+  try {
+    const remote = await downloadShiftLog();
+    if (!remote || !Array.isArray(remote.shifts)) return { loaded: false, added: 0 };
+    const before = state.shifts.length;
+    state.shifts = mergeShifts(state.shifts, remote.shifts);
+    saveShifts();
+    return { loaded: true, added: state.shifts.length - before };
+  } catch (e) {
+    console.warn('Shift log download failed:', e);
+    return { loaded: false, error: e.message };
+  }
+}
+
+// Debounced upload so rapid clock-ins/outs don't spam Drive
+let _shiftLogUploadTimer = null;
+function scheduleShiftLogUpload() {
+  if (_shiftLogUploadTimer) clearTimeout(_shiftLogUploadTimer);
+  _shiftLogUploadTimer = setTimeout(async () => {
+    _shiftLogUploadTimer = null;
+    try {
+      await uploadShiftLog();
+    } catch (e) {
+      console.warn('Shift log upload failed:', e);
+    }
+  }, 2500);
 }
 
 /* ================================================== Sheets API ================================================== */
@@ -1996,6 +2129,7 @@ async function syncClockIn(session) {
 
   await refreshTotals();
   setSyncStatus('ok');
+  scheduleShiftLogUpload();
 }
 
 /**
@@ -2101,6 +2235,7 @@ async function syncClockOut(session) {
 
   await refreshTotals();
   setSyncStatus('ok');
+  scheduleShiftLogUpload();
 }
 
 function parseTimeStringToFraction(s) {
@@ -2743,6 +2878,63 @@ function selectDoctor(name) {
   } else {
     showView('clock');
     refreshTotals().catch(() => {});
+    // Background: bi-directionally sync shift log with Drive so that this browser
+    // has the same clock-in/out data as other devices (essential for attendance records).
+    syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
+  }
+}
+
+// Merge remote Drive log with local, save, and push the merged result back.
+// This ensures all devices converge on the same shift history.
+async function syncShiftLogBidirectional() {
+  if (!isAuthed() || !state.currentDoctor) return;
+  try {
+    const result = await loadShiftsFromDrive();
+    // Always upload (either merged remote-into-local, or upload-only if remote missing)
+    await uploadShiftLog();
+    if (result.loaded && result.added > 0) {
+      refreshTotals().catch(() => {});
+      toast(`打刻ログを同期しました (+${result.added}件)`, 'info');
+    }
+  } catch (e) {
+    console.warn('bidirectional sync failed:', e);
+  }
+}
+
+async function handleUploadShiftLog() {
+  if (!isAuthed()) { toast('先に Google にサインインしてください', 'error'); return; }
+  if (!state.currentDoctor) { toast('医師を選択してください', 'error'); return; }
+  setSyncStatus('busy');
+  try {
+    await uploadShiftLog();
+    setSyncStatus('ok');
+    toast(`打刻ログを Drive に保存しました (${state.shifts.length}件)`, 'success');
+  } catch (e) {
+    setSyncStatus('warn');
+    toast('保存に失敗: ' + e.message, 'error');
+  }
+}
+
+async function handleDownloadShiftLog() {
+  if (!isAuthed()) { toast('先に Google にサインインしてください', 'error'); return; }
+  if (!state.currentDoctor) { toast('医師を選択してください', 'error'); return; }
+  setSyncStatus('busy');
+  try {
+    const result = await loadShiftsFromDrive();
+    setSyncStatus('ok');
+    if (result.loaded) {
+      if (result.added > 0) {
+        toast(`Drive から ${result.added}件の打刻を復元しました`, 'success');
+        refreshTotals().catch(() => {});
+      } else {
+        toast('新しい打刻データはありませんでした', 'info');
+      }
+    } else {
+      toast('Drive に打刻ログが見つかりませんでした', 'warn');
+    }
+  } catch (e) {
+    setSyncStatus('warn');
+    toast('復元に失敗: ' + e.message, 'error');
   }
 }
 
@@ -3539,6 +3731,14 @@ async function createAttendanceSheet(year, month) {
   const folderId = await ensureFolder();
   const sheetName = `出勤簿_${year}-${pad(month)}_${doctor}`;
 
+  // Sync shift log from Drive first: if this device didn't do the clock-ins,
+  // its local state.shifts may be empty and we'd fall back to imprecise D/F reconstruction.
+  // Pulling the Drive-stored log gives us the exact clock-in/out timestamps.
+  const syncResult = await loadShiftsFromDrive();
+  if (syncResult.loaded && syncResult.added > 0) {
+    console.log(`Loaded ${syncResult.added} shift(s) from Drive`);
+  }
+
   // Delete existing sheet with same name if it exists
   const existing = await findSheetInFolder(folderId, sheetName);
   if (existing) {
@@ -3763,6 +3963,8 @@ async function startSignIn() {
     // Try to set up folder lazily; just navigate to clock
     showView('clock');
     refreshTotals().catch(() => {});
+    // Sync shift log with Drive so this device can generate accurate attendance records
+    syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
   } catch (e) {
     console.error(e);
     setSyncStatus('warn');
@@ -4220,6 +4422,8 @@ function bindEvents() {
       case 'edit-shifts':         openShiftScheduleEditor(); break;
       case 'reformat-sheet':      reformatCurrentMonthSheet(); break;
       case 'print-attendance':    openPrintAttendance(); break;
+      case 'upload-shift-log':    handleUploadShiftLog(); break;
+      case 'download-shift-log':  handleDownloadShiftLog(); break;
       case 'reload-today-shift':  state.scheduleCache = {}; renderTodayShift().catch(() => {}); break;
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
