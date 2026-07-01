@@ -3017,8 +3017,24 @@ async function computeAttendanceData(year, month) {
 
   // Build schedule map from sheet C column, fall back to JSON
   let scheduleMap = {};
+  // Normalize shift labels to canonical form. This handles compound labels like
+  // '急病センター 明', '日勤 会議', '日勤/会議' by matching a canonical keyword.
+  // Priority order matters: '25勤' before '夜勤' (since 25勤 contains no 夜勤 char),
+  // and '明' before '日勤' (an 明 day should not also be treated as 日勤).
+  const normalizeShiftType = (raw) => {
+    if (!raw) return null;
+    const s = String(raw);
+    if (s.includes('25勤')) return '25勤';
+    if (s.includes('夜勤')) return '夜勤';
+    if (s.includes('明'))   return '明';
+    if (s.includes('日勤')) return '日勤';
+    if (s.includes('休'))   return '休';
+    return null;
+  };
+
   for (let day = 1; day <= daysInMonth; day++) {
-    if (cCol[day - 1]?.[0]) scheduleMap[day] = cCol[day - 1][0];
+    const norm = normalizeShiftType(cCol[day - 1]?.[0]);
+    if (norm) scheduleMap[day] = norm;
   }
   try {
     const sched = await fetchSchedule(year, month);
@@ -3026,7 +3042,8 @@ async function computeAttendanceData(year, month) {
       if (!scheduleMap[day]) {
         const d = new Date(year, month - 1, day);
         const s = shiftFromSchedule(d, state.currentDoctor, sched);
-        if (s) scheduleMap[day] = s;
+        const norm = normalizeShiftType(s);
+        if (norm) scheduleMap[day] = norm;
       }
     }
   } catch {}
