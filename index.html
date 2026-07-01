@@ -4511,6 +4511,10 @@ function init() {
             setSyncStatus('ok');
             showView('clock');
             refreshTotals().catch(() => {});
+            // Sync shift log with Drive so all devices converge on the same shift history.
+            // This is essential for the attendance record feature — devices that didn't
+            // do the clock-in need to pull the accurate timestamps from Drive.
+            syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
             // Geo prompt after a short delay
             setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
           }).catch(() => {
