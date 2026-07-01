@@ -1290,7 +1290,7 @@
     <div class="card">
       <h2 class="section-title">出勤簿の出力</h2>
       <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
-        月末に紙で提出する救命救急センター出勤簿を、指定月のシートデータから Google スプレッドシートとして自動作成します。作成後は A4横の印刷用PDFを直接ダウンロードできます。
+        月末に紙で提出する救命救急センター出勤簿を、指定月のシートデータから Google スプレッドシートとして自動作成します。作成後は A4縦の印刷用PDFを直接ダウンロードできます。
       </p>
       <div class="btn-row">
         <button class="btn" data-action="print-attendance">📋 出勤簿を作成</button>
@@ -2985,31 +2985,41 @@ async function reformatCurrentMonthSheet() {
 
 /* ================================================== Attendance record (出勤簿) - Google Sheets version ================================================== */
 
-// --- Compute daily data for the printout, from state.shifts + spreadsheet ---
+// --- Compute daily data for the printout ---
+// Priority: state.shifts (local, has ISO timestamps) → sheet D/F columns (fallback for months
+// where local shifts are missing, e.g., after reinstall or from another device)
 async function computeAttendanceData(year, month) {
   const daysInMonth = new Date(year, month, 0).getDate();
   const data = {};
   for (let day = 1; day <= daysInMonth; day++) {
     data[day] = {
       day,
-      checkType: null,  // '日勤日' | '夜勤日' | '明け日' | '週休日'
+      checkType: null,
       startTime: null,
       endTime: null,
       workHours: new Set(),
     };
   }
 
-  // 1. Read schedule types from sheet's C column, then fall back to JSON
-  let scheduleMap = {};
+  // 1. Read C, D, E, F columns from the month's spreadsheet
+  let cCol = [], dCol = [], eCol = [], fCol = [];
   const monthKey = ymKey(year, month);
   const sid = state.cache.sheets[monthKey];
   if (sid && isAuthed()) {
     try {
-      const r = await sheetsValuesGet(sid, 'C4:C34', { valueRenderOption: 'FORMATTED_VALUE' });
-      (r.values || []).forEach((row, i) => {
-        if (row[0]) scheduleMap[i + 1] = row[0];
-      });
-    } catch (e) { console.warn('sheet C read:', e); }
+      const r = await sheetsValuesBatchGet(sid, ['C4:C34', 'D4:D34', 'E4:E34', 'F4:F34']);
+      const vr = r.valueRanges || [];
+      cCol = vr[0]?.values || [];
+      dCol = vr[1]?.values || [];
+      eCol = vr[2]?.values || [];
+      fCol = vr[3]?.values || [];
+    } catch (e) { console.warn('sheet C/D/E/F read:', e); }
+  }
+
+  // Build schedule map from sheet C column, fall back to JSON
+  let scheduleMap = {};
+  for (let day = 1; day <= daysInMonth; day++) {
+    if (cCol[day - 1]?.[0]) scheduleMap[day] = cCol[day - 1][0];
   }
   try {
     const sched = await fetchSchedule(year, month);
@@ -3022,7 +3032,7 @@ async function computeAttendanceData(year, month) {
     }
   } catch {}
 
-  // Map shift type to checkbox display
+  // Map shift type to checkbox
   for (let day = 1; day <= daysInMonth; day++) {
     const t = scheduleMap[day];
     if (t === '日勤') data[day].checkType = '日勤日';
@@ -3031,7 +3041,31 @@ async function computeAttendanceData(year, month) {
     else if (t === '休') data[day].checkType = '週休日';
   }
 
-  // 2. Process shifts from local state
+  // Helpers
+  const parseHM = (s) => {
+    if (!s) return null;
+    const m = String(s).match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return null;
+    return parseInt(m[1]) * 60 + parseInt(m[2]);
+  };
+  const fmtMin = (min) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+  // Round end time to the official minimum:
+  //   - Ending on 日勤日 → minimum 17:30 (early departure still recorded as 17:30)
+  //   - Ending on 明け日 (夜勤/25勤 の翌日) → minimum 9:30
+  // This matches how the paper attendance record should be filled: even if the doctor
+  // physically clocked out before the official end time, the record shows the official time.
+  const OFFICIAL_END_MIN = {
+    '日勤日': 17 * 60 + 30,   // 17:30
+    '明け日': 9 * 60 + 30,    // 9:30
+  };
+  const roundEndMin = (endMin, endDayType) => {
+    const official = OFFICIAL_END_MIN[endDayType];
+    if (official != null && endMin < official) return official;
+    return endMin;
+  };
+
+  // 2. First, populate from state.shifts (has actual clockIn/clockOut ISO timestamps)
+  const filledFromLocal = new Set();
   for (const shift of state.shifts) {
     if (!shift.clockIn) continue;
     const ci = new Date(shift.clockIn);
@@ -3040,6 +3074,7 @@ async function computeAttendanceData(year, month) {
     const co = shift.clockOut ? new Date(shift.clockOut) : null;
 
     data[startDay].startTime = `${pad(ci.getHours())}:${pad(ci.getMinutes())}`;
+    filledFromLocal.add(startDay);
 
     if (co) {
       const startTotalMin = ci.getHours() * 60 + ci.getMinutes();
@@ -3048,10 +3083,12 @@ async function computeAttendanceData(year, month) {
                    && co.getDate() === ci.getDate();
 
       if (sameDay) {
-        data[startDay].endTime = `${pad(co.getHours())}:${pad(co.getMinutes())}`;
-        const endTotalMin = co.getHours() * 60 + co.getMinutes();
+        let endMin = co.getHours() * 60 + co.getMinutes();
+        // Apply end-time rounding for 日勤日
+        endMin = roundEndMin(endMin, data[startDay].checkType);
+        data[startDay].endTime = fmtMin(endMin);
         for (let h = 0; h < 24; h++) {
-          if ((h + 1) * 60 > startTotalMin && h * 60 < endTotalMin) {
+          if ((h + 1) * 60 > startTotalMin && h * 60 < endMin) {
             data[startDay].workHours.add(h);
           }
         }
@@ -3061,11 +3098,93 @@ async function computeAttendanceData(year, month) {
         }
         if (co.getFullYear() === year && co.getMonth() + 1 === month && co.getDate() <= daysInMonth) {
           const endDay = co.getDate();
-          const endTotalMin = co.getHours() * 60 + co.getMinutes();
-          data[endDay].endTime = `${pad(co.getHours())}:${pad(co.getMinutes())}`;
+          let endMin = co.getHours() * 60 + co.getMinutes();
           if (!data[endDay].checkType) data[endDay].checkType = '明け日';
+          // Apply end-time rounding for 明け日
+          endMin = roundEndMin(endMin, data[endDay].checkType);
+          data[endDay].endTime = fmtMin(endMin);
           for (let h = 0; h < 24; h++) {
-            if (h * 60 < endTotalMin) data[endDay].workHours.add(h);
+            if (h * 60 < endMin) data[endDay].workHours.add(h);
+          }
+          filledFromLocal.add(endDay);
+        }
+      }
+    }
+  }
+
+  // 3. For days not in state.shifts, reconstruct from spreadsheet D/F columns
+  // Convention (see syncClockIn/syncClockOut in this app):
+  //   D column: pre-shift overtime duration (before official shift start)
+  //     → clock-in time = official shift start − D
+  //     → 日勤/25勤: official start = 8:30; 夜勤: official start = 16:30
+  //   F column: actual clock-out time
+  //     → 日勤: F on same-day row
+  //     → 夜勤/25勤: F on next-day row (which is 明け日)
+  //     → 明: F on that day's row (continuation of prior night's clock-out)
+  for (let day = 1; day <= daysInMonth; day++) {
+    if (filledFromLocal.has(day)) continue;
+    const type = scheduleMap[day];
+    if (!type || type === '休' || type === '出張') continue;
+
+    const dVal = dCol[day - 1]?.[0];
+    const fVal = fCol[day - 1]?.[0];
+
+    if (type === '明') {
+      // End-of-shift day for prior 夜勤/25勤: only end time on this day
+      if (fVal && !data[day].endTime) {
+        let endMin = parseHM(fVal);
+        if (endMin !== null) {
+          endMin = roundEndMin(endMin, '明け日');
+          data[day].endTime = fmtMin(endMin);
+          for (let h = 0; h < 24; h++) {
+            if (h * 60 < endMin) data[day].workHours.add(h);
+          }
+        }
+      }
+      continue;
+    }
+
+    // 日勤/夜勤/25勤: reconstruct clock-in from D column
+    const officialStartMin = (type === '夜勤') ? (16 * 60 + 30) : (8 * 60 + 30);
+    const preOTMin = parseHM(dVal) || 0;
+    const clockInMin = officialStartMin - preOTMin;
+
+    if (!data[day].startTime) {
+      data[day].startTime = fmtMin(clockInMin);
+    }
+
+    if (type === '日勤') {
+      // End on same day
+      if (fVal) {
+        let endMin = parseHM(fVal);
+        if (endMin !== null) {
+          endMin = roundEndMin(endMin, '日勤日');
+          if (!data[day].endTime) data[day].endTime = fmtMin(endMin);
+          for (let h = 0; h < 24; h++) {
+            if ((h + 1) * 60 > clockInMin && h * 60 < endMin) {
+              data[day].workHours.add(h);
+            }
+          }
+        }
+      }
+    } else {
+      // 夜勤 or 25勤: pink from clockIn to 24:00 on this day
+      for (let h = 0; h < 24; h++) {
+        if ((h + 1) * 60 > clockInMin) data[day].workHours.add(h);
+      }
+      // End time on next day's F column
+      const nextDay = day + 1;
+      if (nextDay <= daysInMonth && !filledFromLocal.has(nextDay)) {
+        const nextF = fCol[nextDay - 1]?.[0];
+        if (nextF) {
+          let endMin = parseHM(nextF);
+          if (endMin !== null) {
+            if (!data[nextDay].checkType) data[nextDay].checkType = '明け日';
+            endMin = roundEndMin(endMin, '明け日');
+            if (!data[nextDay].endTime) data[nextDay].endTime = fmtMin(endMin);
+            for (let h = 0; h < 24; h++) {
+              if (h * 60 < endMin) data[nextDay].workHours.add(h);
+            }
           }
         }
       }
@@ -3119,40 +3238,40 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
       }
     });
   };
-  setColWidth(0, 1, 34);   // A: day
-  setColWidth(1, 2, 34);   // B: weekday
-  setColWidth(2, 3, 62);   // C: shift type
-  setColWidth(3, 4, 56);   // D: start
-  setColWidth(4, 5, 56);   // E: end
-  setColWidth(5, 29, 25);  // F..AC: hours 0..23 (24 cols)
-  setColWidth(29, 30, 60); // AD: stamp
+  setColWidth(0, 1, 26);   // A: day
+  setColWidth(1, 2, 26);   // B: weekday
+  setColWidth(2, 3, 54);   // C: shift type
+  setColWidth(3, 4, 64);   // D: start (大きめ)
+  setColWidth(4, 5, 64);   // E: end (大きめ)
+  setColWidth(5, 29, 15);  // F..AC: hours 0..23 (24 cols × 15px = 360px)
+  setColWidth(29, 30, 40); // AD: stamp
 
   // Row heights
   requests.push({
     updateDimensionProperties: {
       range: { sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
-      properties: { pixelSize: 36 },
-      fields: 'pixelSize'
-    }
-  });
-  requests.push({
-    updateDimensionProperties: {
-      range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 },
       properties: { pixelSize: 28 },
       fields: 'pixelSize'
     }
   });
   requests.push({
     updateDimensionProperties: {
+      range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 },
+      properties: { pixelSize: 22 },
+      fields: 'pixelSize'
+    }
+  });
+  requests.push({
+    updateDimensionProperties: {
       range: { sheetId, dimension: 'ROWS', startIndex: 2, endIndex: 3 },
-      properties: { pixelSize: 24 },
+      properties: { pixelSize: 20 },
       fields: 'pixelSize'
     }
   });
   requests.push({
     updateDimensionProperties: {
       range: { sheetId, dimension: 'ROWS', startIndex: 3, endIndex: totalRows },
-      properties: { pixelSize: 22 },
+      properties: { pixelSize: 20 },
       fields: 'pixelSize'
     }
   });
@@ -3223,20 +3342,36 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
     { userEnteredValue: { stringValue: '開始' } },
     { userEnteredValue: { stringValue: '終了' } },
   ];
+  const hourHeaders = [];
   for (let h = 0; h < 24; h++) {
-    headerCells.push({ userEnteredValue: { numberValue: h } });
+    hourHeaders.push({
+      userEnteredValue: { numberValue: h },
+      userEnteredFormat: {
+        horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+        textFormat: { fontSize: 7, bold: true },
+        backgroundColor: yellow
+      }
+    });
   }
-  headerCells.push({ userEnteredValue: { stringValue: '印' } });
-  // Apply header formatting
-  const headerFmt = {
+  const stampHeader = {
+    userEnteredValue: { stringValue: '印' },
+    userEnteredFormat: {
+      horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+      textFormat: { fontSize: 10, bold: true },
+      backgroundColor: yellow
+    }
+  };
+  // Apply larger font formatting to the fixed-label headers
+  const labelHeaderFmt = {
     horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
     textFormat: { fontSize: 10, bold: true },
     backgroundColor: yellow
   };
-  headerCells.forEach(c => c.userEnteredFormat = headerFmt);
+  headerCells.forEach(c => c.userEnteredFormat = labelHeaderFmt);
+  const allHeaderCells = [...headerCells, ...hourHeaders, stampHeader];
   requests.push({
     updateCells: {
-      rows: [{ values: headerCells }],
+      rows: [{ values: allHeaderCells }],
       range: { sheetId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 0, endColumnIndex: totalCols },
       fields: 'userEnteredValue,userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat,backgroundColor)'
     }
@@ -3267,11 +3402,11 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
     };
 
     const rowCells = [
-      { userEnteredValue: { numberValue: day }, userEnteredFormat: rowFmtBase },
+      { userEnteredValue: { numberValue: day }, userEnteredFormat: { ...rowFmtBase, textFormat: { fontSize: 10, bold: true } } },
       { userEnteredValue: { stringValue: wd }, userEnteredFormat: wdFmt },
       { userEnteredValue: { stringValue: d.checkType || '' }, userEnteredFormat: typeFmt },
-      { userEnteredValue: d.startTime ? { stringValue: d.startTime } : {}, userEnteredFormat: { ...rowFmtBase, textFormat: { fontSize: 11, bold: true } } },
-      { userEnteredValue: d.endTime ? { stringValue: d.endTime } : {}, userEnteredFormat: { ...rowFmtBase, textFormat: { fontSize: 11, bold: true } } },
+      { userEnteredValue: d.startTime ? { stringValue: d.startTime } : {}, userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 13, bold: true } } },
+      { userEnteredValue: d.endTime ? { stringValue: d.endTime } : {}, userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 13, bold: true } } },
     ];
     for (let h = 0; h < 24; h++) {
       const isWorking = d.workHours.has(h);
@@ -3378,7 +3513,7 @@ function openPrintAttendance() {
       「時間外勤務」フォルダ内に <code>出勤簿_YYYY-MM_氏名</code> という名前で保存されます。<br>
       勤務種別、開始・終了時刻、勤務時間帯 (0〜23時) のピンク塗りを自動入力します。<br>
       <strong>出勤印は空欄</strong>のまま作成されるので、印刷後に押印してください。<br>
-      作成後は <strong>A4横</strong> の印刷用PDFを直接ダウンロードできます。
+      作成後は <strong>A4縦</strong> の印刷用PDFを直接ダウンロードできます。
     </p>
     <div class="field">
       <label>対象月</label>
@@ -3407,11 +3542,12 @@ function openPrintAttendance() {
       const result = await createAttendanceSheet(y2, m2);
       setSyncStatus('ok');
       if (result) {
-        // Sheets can export directly as A4 landscape PDF via URL params
+        // Sheets can export directly as A4 portrait PDF via URL params
+        // scale=4 = "Fit to page" (ensures single-page output)
         const pdfUrl = `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/export?format=pdf`
-          + `&size=A4&portrait=false&fitw=true`
-          + `&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false`
-          + `&top_margin=0.4&bottom_margin=0.4&left_margin=0.4&right_margin=0.4`;
+          + `&size=A4&portrait=true&scale=4&fitw=true&fith=true`
+          + `&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false&horizontal_alignment=CENTER&vertical_alignment=MIDDLE`
+          + `&top_margin=0.3&bottom_margin=0.3&left_margin=0.3&right_margin=0.3`;
         const editUrl = `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit`;
         showModal(`
           <h3>出勤簿を作成しました ✓</h3>
@@ -3419,11 +3555,11 @@ function openPrintAttendance() {
             <strong>${result.sheetName}</strong> を「時間外勤務」フォルダ内に作成しました。
           </p>
           <p class="ink-soft" style="font-size:12px;margin-bottom:14px;">
-            「印刷用PDFを開く」で <strong>A4横</strong> の印刷用PDFを直接ダウンロードできます。<br>
+            「印刷用PDFを開く」で <strong>A4縦</strong> の印刷用PDFを直接ダウンロードできます。<br>
             編集が必要な場合は「編集画面を開く」からスプレッドシートを開いてください。
           </p>
           <div class="btn-row" style="flex-direction:column;gap:8px;">
-            <a class="btn" href="${pdfUrl}" target="_blank" rel="noopener" data-modal-close>📄 印刷用PDFを開く (A4横)</a>
+            <a class="btn" href="${pdfUrl}" target="_blank" rel="noopener" data-modal-close>📄 印刷用PDFを開く (A4縦)</a>
             <a class="btn outline" href="${editUrl}" target="_blank" rel="noopener" data-modal-close>📝 編集画面を開く</a>
             <button class="btn outline" data-modal-close>閉じる</button>
           </div>
