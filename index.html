@@ -3643,11 +3643,10 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
       { userEnteredValue: d.endTime ? { stringValue: d.endTime } : {}, userEnteredFormat: { horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE', textFormat: { fontSize: 13, bold: true } } },
     ];
     for (let s = 0; s < SUB_COUNT; s++) {
-      const isWorking = d.workSlots.has(s);
       rowCells.push({
         userEnteredValue: {},
         userEnteredFormat: {
-          backgroundColor: isWorking ? pink : white,
+          backgroundColor: white,
           horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE'
         }
       });
@@ -3717,6 +3716,49 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
     updateSheetProperties: {
       properties: { sheetId, gridProperties: { frozenRowCount: 3 } },
       fields: 'gridProperties.frozenRowCount'
+    }
+  });
+
+  // 9. Conditional formatting: automatically color subcells pink based on the
+  // start/end time values in columns D and E, so that manual time edits update
+  // the coloring in real time.
+  // Formula (evaluated on top-left cell F4, applied relatively):
+  //   AND(
+  //     OR($D4<>"", $E4<>""),  // at least one time present
+  //     IFERROR((COLUMN()-6)*10/1440 >= TIMEVALUE($D4), TRUE),  // slot >= start
+  //     IFERROR((COLUMN()-6)*10/1440 <  TIMEVALUE($E4), TRUE)   // slot <  end
+  //   )
+  // Notes:
+  //   - COLUMN() is 1-indexed; F is column 6, so (COLUMN()-6)*10 gives slot start in minutes.
+  //   - Dividing by 1440 (minutes/day) makes it comparable to TIMEVALUE (day fraction).
+  //   - IFERROR handles empty D or E (夜勤日/明け日) by treating the missing bound as unbounded.
+  const formula =
+    '=AND(' +
+      'OR($D4<>"",$E4<>""),' +
+      'IFERROR((COLUMN()-6)*10/1440>=TIMEVALUE($D4),TRUE),' +
+      'IFERROR((COLUMN()-6)*10/1440<TIMEVALUE($E4),TRUE)' +
+    ')';
+  requests.push({
+    addConditionalFormatRule: {
+      rule: {
+        ranges: [{
+          sheetId,
+          startRowIndex: 3,                    // row 4 (0-indexed) = first day row
+          endRowIndex: 3 + daysInMonth,
+          startColumnIndex: SUB_START,         // F column (index 5)
+          endColumnIndex: STAMP_COL            // exclusive: stops at last subcell
+        }],
+        booleanRule: {
+          condition: {
+            type: 'CUSTOM_FORMULA',
+            values: [{ userEnteredValue: formula }]
+          },
+          format: {
+            backgroundColor: pink
+          }
+        }
+      },
+      index: 0
     }
   });
 
