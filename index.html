@@ -1288,6 +1288,16 @@
     </div>
 
     <div class="card">
+      <h2 class="section-title">出勤簿の出力</h2>
+      <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
+        月末に紙で提出する救命救急センター出勤簿を、指定月のシートデータから Google スプレッドシートとして自動作成します。作成後は A4横の印刷用PDFを直接ダウンロードできます。
+      </p>
+      <div class="btn-row">
+        <button class="btn" data-action="print-attendance">📋 出勤簿を作成</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h2 class="section-title">データ管理</h2>
       <div class="btn-row">
         <button class="btn outline" data-action="export-data">エクスポート</button>
@@ -2972,6 +2982,462 @@ async function reformatCurrentMonthSheet() {
 }
 
 
+
+/* ================================================== Attendance record (出勤簿) - Google Sheets version ================================================== */
+
+// --- Compute daily data for the printout, from state.shifts + spreadsheet ---
+async function computeAttendanceData(year, month) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const data = {};
+  for (let day = 1; day <= daysInMonth; day++) {
+    data[day] = {
+      day,
+      checkType: null,  // '日勤日' | '夜勤日' | '明け日' | '週休日'
+      startTime: null,
+      endTime: null,
+      workHours: new Set(),
+    };
+  }
+
+  // 1. Read schedule types from sheet's C column, then fall back to JSON
+  let scheduleMap = {};
+  const monthKey = ymKey(year, month);
+  const sid = state.cache.sheets[monthKey];
+  if (sid && isAuthed()) {
+    try {
+      const r = await sheetsValuesGet(sid, 'C4:C34', { valueRenderOption: 'FORMATTED_VALUE' });
+      (r.values || []).forEach((row, i) => {
+        if (row[0]) scheduleMap[i + 1] = row[0];
+      });
+    } catch (e) { console.warn('sheet C read:', e); }
+  }
+  try {
+    const sched = await fetchSchedule(year, month);
+    for (let day = 1; day <= daysInMonth; day++) {
+      if (!scheduleMap[day]) {
+        const d = new Date(year, month - 1, day);
+        const s = shiftFromSchedule(d, state.currentDoctor, sched);
+        if (s) scheduleMap[day] = s;
+      }
+    }
+  } catch {}
+
+  // Map shift type to checkbox display
+  for (let day = 1; day <= daysInMonth; day++) {
+    const t = scheduleMap[day];
+    if (t === '日勤') data[day].checkType = '日勤日';
+    else if (t === '夜勤' || t === '25勤') data[day].checkType = '夜勤日';
+    else if (t === '明') data[day].checkType = '明け日';
+    else if (t === '休') data[day].checkType = '週休日';
+  }
+
+  // 2. Process shifts from local state
+  for (const shift of state.shifts) {
+    if (!shift.clockIn) continue;
+    const ci = new Date(shift.clockIn);
+    if (ci.getFullYear() !== year || ci.getMonth() + 1 !== month) continue;
+    const startDay = ci.getDate();
+    const co = shift.clockOut ? new Date(shift.clockOut) : null;
+
+    data[startDay].startTime = `${pad(ci.getHours())}:${pad(ci.getMinutes())}`;
+
+    if (co) {
+      const startTotalMin = ci.getHours() * 60 + ci.getMinutes();
+      const sameDay = co.getFullYear() === ci.getFullYear()
+                   && co.getMonth() === ci.getMonth()
+                   && co.getDate() === ci.getDate();
+
+      if (sameDay) {
+        data[startDay].endTime = `${pad(co.getHours())}:${pad(co.getMinutes())}`;
+        const endTotalMin = co.getHours() * 60 + co.getMinutes();
+        for (let h = 0; h < 24; h++) {
+          if ((h + 1) * 60 > startTotalMin && h * 60 < endTotalMin) {
+            data[startDay].workHours.add(h);
+          }
+        }
+      } else {
+        for (let h = 0; h < 24; h++) {
+          if ((h + 1) * 60 > startTotalMin) data[startDay].workHours.add(h);
+        }
+        if (co.getFullYear() === year && co.getMonth() + 1 === month && co.getDate() <= daysInMonth) {
+          const endDay = co.getDate();
+          const endTotalMin = co.getHours() * 60 + co.getMinutes();
+          data[endDay].endTime = `${pad(co.getHours())}:${pad(co.getMinutes())}`;
+          if (!data[endDay].checkType) data[endDay].checkType = '明け日';
+          for (let h = 0; h < 24; h++) {
+            if (h * 60 < endTotalMin) data[endDay].workHours.add(h);
+          }
+        }
+      }
+    }
+  }
+
+  return data;
+}
+
+// --- Build batchUpdate requests to construct the attendance sheet layout ---
+// Layout (1 day = 1 row):
+//   A: day number    B: weekday   C: shift type   D: start   E: end
+//   F..AC (24 cols): hours 0..23   AD: stamp
+//   Rows: 1=title, 2=year/month + name, 3=column headers, 4..34=day rows
+function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const reiwaYear = year - 2018;
+
+  // Colors
+  const pink = { red: 1.0, green: 0.753, blue: 0.796 };  // #FFC0CB
+  const yellow = { red: 1.0, green: 0.898, blue: 0.596 }; // #FFE598
+  const lightGray = { red: 0.949, green: 0.949, blue: 0.949 };
+  const white = { red: 1.0, green: 1.0, blue: 1.0 };
+  const red = { red: 1.0, green: 0.0, blue: 0.0 };
+  const black = { red: 0.0, green: 0.0, blue: 0.0 };
+  const dayColor = { '日勤日': { red: 0.85, green: 0.94, blue: 0.85 },
+                     '夜勤日': { red: 0.85, green: 0.90, blue: 0.98 },
+                     '明け日': { red: 0.94, green: 0.90, blue: 0.98 },
+                     '週休日': { red: 0.98, green: 0.90, blue: 0.90 } };
+
+  const totalCols = 30;  // A..AD (day, weekday, type, start, end, 24 hours, stamp)
+  const headerRows = 3;
+  const totalRows = headerRows + daysInMonth;
+  const requests = [];
+
+  // 1. Grid size
+  requests.push({
+    updateSheetProperties: {
+      properties: { sheetId, gridProperties: { rowCount: totalRows + 2, columnCount: totalCols } },
+      fields: 'gridProperties(rowCount,columnCount)',
+    }
+  });
+
+  // 2. Column widths
+  const setColWidth = (startCol, endCol, px) => {
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'COLUMNS', startIndex: startCol, endIndex: endCol },
+        properties: { pixelSize: px },
+        fields: 'pixelSize'
+      }
+    });
+  };
+  setColWidth(0, 1, 34);   // A: day
+  setColWidth(1, 2, 34);   // B: weekday
+  setColWidth(2, 3, 62);   // C: shift type
+  setColWidth(3, 4, 56);   // D: start
+  setColWidth(4, 5, 56);   // E: end
+  setColWidth(5, 29, 25);  // F..AC: hours 0..23 (24 cols)
+  setColWidth(29, 30, 60); // AD: stamp
+
+  // Row heights
+  requests.push({
+    updateDimensionProperties: {
+      range: { sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+      properties: { pixelSize: 36 },
+      fields: 'pixelSize'
+    }
+  });
+  requests.push({
+    updateDimensionProperties: {
+      range: { sheetId, dimension: 'ROWS', startIndex: 1, endIndex: 2 },
+      properties: { pixelSize: 28 },
+      fields: 'pixelSize'
+    }
+  });
+  requests.push({
+    updateDimensionProperties: {
+      range: { sheetId, dimension: 'ROWS', startIndex: 2, endIndex: 3 },
+      properties: { pixelSize: 24 },
+      fields: 'pixelSize'
+    }
+  });
+  requests.push({
+    updateDimensionProperties: {
+      range: { sheetId, dimension: 'ROWS', startIndex: 3, endIndex: totalRows },
+      properties: { pixelSize: 22 },
+      fields: 'pixelSize'
+    }
+  });
+
+  // 3. Title row (row 1): "救命救急センター出勤簿" merged A1:AC1
+  requests.push({
+    mergeCells: {
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: totalCols },
+      mergeType: 'MERGE_ALL'
+    }
+  });
+  requests.push({
+    updateCells: {
+      rows: [{ values: [{
+        userEnteredValue: { stringValue: '救命救急センター出勤簿' },
+        userEnteredFormat: {
+          horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+          textFormat: { fontSize: 18, bold: true }
+        }
+      }] }],
+      range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+      fields: 'userEnteredValue,userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)'
+    }
+  });
+
+  // 4. Row 2: 令和X年Y月分 (A2:F2) | 氏名 (G2:AC2)
+  requests.push({
+    mergeCells: {
+      range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 6 },
+      mergeType: 'MERGE_ALL'
+    }
+  });
+  requests.push({
+    mergeCells: {
+      range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 6, endColumnIndex: totalCols },
+      mergeType: 'MERGE_ALL'
+    }
+  });
+  requests.push({
+    updateCells: {
+      rows: [{ values: [
+        {
+          userEnteredValue: { stringValue: `令和${reiwaYear}年${month}月分` },
+          userEnteredFormat: {
+            horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+            textFormat: { fontSize: 13, bold: true }
+          }
+        },
+        {}, {}, {}, {}, {},
+        {
+          userEnteredValue: { stringValue: `氏名: ${doctorName}` },
+          userEnteredFormat: {
+            horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+            textFormat: { fontSize: 13, bold: true }
+          }
+        }
+      ] }],
+      range: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: 0, endColumnIndex: 7 },
+      fields: 'userEnteredValue,userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat)'
+    }
+  });
+
+  // 5. Row 3: column headers
+  const headerCells = [
+    { userEnteredValue: { stringValue: '日' } },
+    { userEnteredValue: { stringValue: '曜' } },
+    { userEnteredValue: { stringValue: '種別' } },
+    { userEnteredValue: { stringValue: '開始' } },
+    { userEnteredValue: { stringValue: '終了' } },
+  ];
+  for (let h = 0; h < 24; h++) {
+    headerCells.push({ userEnteredValue: { numberValue: h } });
+  }
+  headerCells.push({ userEnteredValue: { stringValue: '印' } });
+  // Apply header formatting
+  const headerFmt = {
+    horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+    textFormat: { fontSize: 10, bold: true },
+    backgroundColor: yellow
+  };
+  headerCells.forEach(c => c.userEnteredFormat = headerFmt);
+  requests.push({
+    updateCells: {
+      rows: [{ values: headerCells }],
+      range: { sheetId, startRowIndex: 2, endRowIndex: 3, startColumnIndex: 0, endColumnIndex: totalCols },
+      fields: 'userEnteredValue,userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat,backgroundColor)'
+    }
+  });
+
+  // 6. Day rows (row 4..34)
+  const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  const dayRowsCells = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dt = new Date(year, month - 1, day);
+    const wIdx = dt.getDay();
+    const wd = weekdays[wIdx];
+    const isWeekend = (wIdx === 0 || wIdx === 6);
+    const d = dailyData[day];
+
+    const rowFmtBase = {
+      horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE',
+      textFormat: { fontSize: 10 }
+    };
+    const wdFmt = {
+      ...rowFmtBase,
+      textFormat: { fontSize: 10, foregroundColor: isWeekend ? red : black }
+    };
+    const typeFmt = {
+      ...rowFmtBase,
+      textFormat: { fontSize: 10, bold: true },
+      backgroundColor: d.checkType ? dayColor[d.checkType] : white
+    };
+
+    const rowCells = [
+      { userEnteredValue: { numberValue: day }, userEnteredFormat: rowFmtBase },
+      { userEnteredValue: { stringValue: wd }, userEnteredFormat: wdFmt },
+      { userEnteredValue: { stringValue: d.checkType || '' }, userEnteredFormat: typeFmt },
+      { userEnteredValue: d.startTime ? { stringValue: d.startTime } : {}, userEnteredFormat: { ...rowFmtBase, textFormat: { fontSize: 11, bold: true } } },
+      { userEnteredValue: d.endTime ? { stringValue: d.endTime } : {}, userEnteredFormat: { ...rowFmtBase, textFormat: { fontSize: 11, bold: true } } },
+    ];
+    for (let h = 0; h < 24; h++) {
+      const isWorking = d.workHours.has(h);
+      rowCells.push({
+        userEnteredValue: {},
+        userEnteredFormat: {
+          backgroundColor: isWorking ? pink : white,
+          horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE'
+        }
+      });
+    }
+    // Empty stamp cell (for physical seal)
+    rowCells.push({
+      userEnteredValue: {},
+      userEnteredFormat: {
+        backgroundColor: white,
+        horizontalAlignment: 'CENTER', verticalAlignment: 'MIDDLE'
+      }
+    });
+    dayRowsCells.push({ values: rowCells });
+  }
+  requests.push({
+    updateCells: {
+      rows: dayRowsCells,
+      range: { sheetId, startRowIndex: 3, endRowIndex: 3 + daysInMonth, startColumnIndex: 0, endColumnIndex: totalCols },
+      fields: 'userEnteredValue,userEnteredFormat(horizontalAlignment,verticalAlignment,textFormat,backgroundColor)'
+    }
+  });
+
+  // 7. Borders
+  const borderStyle = { style: 'SOLID', color: black };
+  requests.push({
+    updateBorders: {
+      range: { sheetId, startRowIndex: 2, endRowIndex: 3 + daysInMonth, startColumnIndex: 0, endColumnIndex: totalCols },
+      top: borderStyle, bottom: borderStyle, left: borderStyle, right: borderStyle,
+      innerHorizontal: borderStyle, innerVertical: borderStyle
+    }
+  });
+
+  // 8. Freeze the first 3 rows
+  requests.push({
+    updateSheetProperties: {
+      properties: { sheetId, gridProperties: { frozenRowCount: 3 } },
+      fields: 'gridProperties.frozenRowCount'
+    }
+  });
+
+  return requests;
+}
+
+// --- Main creation function: build the sheet in Google Drive ---
+async function createAttendanceSheet(year, month) {
+  if (!isAuthed()) throw new Error('Google にサインインしてください');
+
+  const doctor = state.currentDoctor;
+  const folderId = await ensureFolder();
+  const sheetName = `出勤簿_${year}-${pad(month)}_${doctor}`;
+
+  // Delete existing sheet with same name if it exists
+  const existing = await findSheetInFolder(folderId, sheetName);
+  if (existing) {
+    if (!confirm(`「${sheetName}」は既に存在します。上書き作成しますか?\n(既存のシートは削除されます)`)) {
+      return null;
+    }
+    try {
+      await gApi('DELETE', `https://www.googleapis.com/drive/v3/files/${existing}`);
+    } catch (e) { console.warn('delete existing:', e); }
+  }
+
+  // 1. Compute data
+  const dailyData = await computeAttendanceData(year, month);
+
+  // 2. Create new spreadsheet in the folder
+  const spreadsheetId = await createSheetInFolder(folderId, sheetName);
+
+  // 3. Get the first sheet's ID and rename it
+  const sheetId = await getFirstSheetId(spreadsheetId);
+
+  // Rename the tab
+  await sheetsBatchUpdate(spreadsheetId, [{
+    updateSheetProperties: {
+      properties: { sheetId, title: `${month}月分` },
+      fields: 'title'
+    }
+  }]);
+
+  // 4. Build layout
+  const requests = buildAttendanceRequests(year, month, doctor, dailyData, sheetId);
+  await sheetsBatchUpdate(spreadsheetId, requests);
+
+  return { spreadsheetId, sheetName };
+}
+
+// --- UI ---
+function openPrintAttendance() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+
+  showModal(`
+    <h3>出勤簿を作成</h3>
+    <p class="ink-soft" style="font-size:12px;margin-bottom:14px;">
+      指定した月の勤務データから、救命救急センター出勤簿の Google スプレッドシートを作成します。<br>
+      「時間外勤務」フォルダ内に <code>出勤簿_YYYY-MM_氏名</code> という名前で保存されます。<br>
+      勤務種別、開始・終了時刻、勤務時間帯 (0〜23時) のピンク塗りを自動入力します。<br>
+      <strong>出勤印は空欄</strong>のまま作成されるので、印刷後に押印してください。<br>
+      作成後は <strong>A4横</strong> の印刷用PDFを直接ダウンロードできます。
+    </p>
+    <div class="field">
+      <label>対象月</label>
+      <div class="datetime-row">
+        <input type="number" id="print-year" value="${y}" min="2020" max="2099" style="text-align:center;">
+        <select id="print-month">
+          ${Array.from({length:12}, (_,i)=>i+1).map(mm =>
+            `<option value="${mm}" ${mm===m?'selected':''}>${mm}月</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn outline" data-modal-close>キャンセル</button>
+      <button class="btn" id="print-generate">スプレッドシートを作成</button>
+    </div>
+  `);
+
+  document.getElementById('print-generate').addEventListener('click', async () => {
+    const y2 = parseInt(document.getElementById('print-year').value);
+    const m2 = parseInt(document.getElementById('print-month').value);
+    if (!y2 || !m2) { toast('年月を確認してください', 'error'); return; }
+    closeModal();
+    setSyncStatus('busy');
+    toast('作成中... しばらくお待ちください', 'info');
+    try {
+      const result = await createAttendanceSheet(y2, m2);
+      setSyncStatus('ok');
+      if (result) {
+        // Sheets can export directly as A4 landscape PDF via URL params
+        const pdfUrl = `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/export?format=pdf`
+          + `&size=A4&portrait=false&fitw=true`
+          + `&gridlines=false&printtitle=false&sheetnames=false&pagenumbers=false`
+          + `&top_margin=0.4&bottom_margin=0.4&left_margin=0.4&right_margin=0.4`;
+        const editUrl = `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit`;
+        showModal(`
+          <h3>出勤簿を作成しました ✓</h3>
+          <p style="margin:10px 0 14px;">
+            <strong>${result.sheetName}</strong> を「時間外勤務」フォルダ内に作成しました。
+          </p>
+          <p class="ink-soft" style="font-size:12px;margin-bottom:14px;">
+            「印刷用PDFを開く」で <strong>A4横</strong> の印刷用PDFを直接ダウンロードできます。<br>
+            編集が必要な場合は「編集画面を開く」からスプレッドシートを開いてください。
+          </p>
+          <div class="btn-row" style="flex-direction:column;gap:8px;">
+            <a class="btn" href="${pdfUrl}" target="_blank" rel="noopener" data-modal-close>📄 印刷用PDFを開く (A4横)</a>
+            <a class="btn outline" href="${editUrl}" target="_blank" rel="noopener" data-modal-close>📝 編集画面を開く</a>
+            <button class="btn outline" data-modal-close>閉じる</button>
+          </div>
+        `);
+      }
+    } catch (e) {
+      console.error(e);
+      setSyncStatus('warn');
+      toast('作成失敗: ' + e.message, 'error');
+    }
+  });
+}
+
+
 async function openPlannedHoursEditor() {
   // Need a sheet for current month; create if missing
   const now = new Date();
@@ -3543,6 +4009,7 @@ function bindEvents() {
       case 'edit-planned':        openPlannedHoursEditor(); break;
       case 'edit-shifts':         openShiftScheduleEditor(); break;
       case 'reformat-sheet':      reformatCurrentMonthSheet(); break;
+      case 'print-attendance':    openPrintAttendance(); break;
       case 'reload-today-shift':  state.scheduleCache = {}; renderTodayShift().catch(() => {}); break;
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
