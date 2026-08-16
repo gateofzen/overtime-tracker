@@ -1239,6 +1239,16 @@
           Google Cloud Console で作成した Web application 用の Client ID を入力してください。
         </p>
       </div>
+      <div class="field">
+        <label>Cloud Console に登録する Redirect URI</label>
+        <div class="shortcut-url">
+          <input type="text" id="redirect-uri-display" readonly>
+          <button class="btn outline" data-action="copy-url" data-url-id="redirect-uri-display">コピー</button>
+        </div>
+        <p class="ink-mute" style="font-size:11px;margin-top:6px;">
+          この URL をコピーして、<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--terracotta);">Google Cloud Console</a> の OAuth Client ID の「Authorized redirect URIs」に**完全一致で**追加してください (末尾スラッシュ、大小文字を含む)。
+        </p>
+      </div>
       <div id="auth-status-display" style="margin:10px 0 14px;padding:10px 12px;background:var(--paper-soft);border-radius:4px;font-size:12px;line-height:1.6;"></div>
       <div class="btn-row">
         <button class="btn" data-action="save-client-id">保存</button>
@@ -3282,6 +3292,11 @@ function showView(name) {
     updateGeoStatus();
     updateShortcutUrls();
     updateAuthStatusDisplay();
+    // Show the exact redirect URI the app will send to Google, so the user can
+    // paste it into Cloud Console without any manual typing (avoiding trailing-slash
+    // and case-sensitivity mismatches).
+    const redirectDisplay = document.getElementById('redirect-uri-display');
+    if (redirectDisplay) redirectDisplay.value = getRedirectUri();
     // Show sign-out button if authenticated
     const signoutBtn = document.getElementById('signout-btn');
     if (signoutBtn) signoutBtn.style.display = isAuthed() ? '' : 'none';
