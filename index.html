@@ -1436,6 +1436,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
+const APP_VERSION = 'v2026.11.19-a';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 // Overtime caps: doctor is expected to clock out by these times unless an extension
@@ -3474,13 +3475,24 @@ function showView(name) {
 
 // Display authentication state so the user can verify current session status.
 // Uses GIS Implicit Flow (no refresh_token), so we show whether the access token
-// is valid + when it will need silent refresh.
+// is valid + when it will need silent refresh. Also runs a localStorage write
+// test to catch cases where storage isn't persisting.
 function updateAuthStatusDisplay() {
   const el = document.getElementById('auth-status-display');
   if (!el) return;
   const saved = storageGet(STORAGE_KEYS.auth);
   const hasAccessToken = !!(saved && saved.accessToken && saved.expiresAt && Date.now() < saved.expiresAt);
   const expiresIn = saved && saved.expiresAt ? Math.max(0, Math.floor((saved.expiresAt - Date.now()) / 60000)) : null;
+  const expiresAt = saved && saved.expiresAt ? new Date(saved.expiresAt).toLocaleString('ja-JP') : null;
+
+  // localStorage write-read test
+  let storageWorks = false;
+  try {
+    const testKey = '_overtime_storage_test';
+    localStorage.setItem(testKey, 'ok');
+    storageWorks = localStorage.getItem(testKey) === 'ok';
+    localStorage.removeItem(testKey);
+  } catch { storageWorks = false; }
 
   const rows = [];
   if (state.auth.email) {
@@ -3490,11 +3502,33 @@ function updateAuthStatusDisplay() {
   } else {
     rows.push('アカウント: (未サインイン)');
   }
+
   if (hasAccessToken) {
-    rows.push(`状態: ✓ サインイン中 (残り約${expiresIn}分、期限前に自動更新されます)`);
+    rows.push(`状態: ✓ サインイン中 (期限まで約${expiresIn}分)`);
+    rows.push(`期限時刻: ${expiresAt}`);
+  } else if (saved && saved.accessToken) {
+    rows.push(`状態: ✗ トークンは保存されているが期限切れ (${expiresAt})`);
+  } else if (saved) {
+    rows.push('状態: ✗ localStorage にトークンなし');
   } else {
     rows.push('状態: ✗ 未サインイン');
   }
+
+  rows.push('');
+  if (storageWorks) {
+    rows.push('<span style="color:var(--ink-mute);">localStorage: ✓ 動作 (トークンは永続化されます)</span>');
+  } else {
+    rows.push('<span style="color:var(--terracotta);">localStorage: ✗ 使用不可 (プライベートモード? → 毎回サインインが必要)</span>');
+  }
+
+  // Instructions if problem
+  if (!hasAccessToken && storageWorks) {
+    rows.push('');
+    rows.push('<span style="color:var(--terracotta);">→ サインインボタンを押してください</span>');
+  }
+
+  rows.push('');
+  rows.push(`<span style="color:var(--ink-mute);font-size:11px;">アプリ版: ${APP_VERSION}</span>`);
   el.innerHTML = rows.join('<br>');
 }
 
