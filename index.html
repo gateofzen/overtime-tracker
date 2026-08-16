@@ -1434,6 +1434,10 @@
 const DOCTORS = ['提嶋', '遠藤', '前川', '小舘', '森木', '中嶋', '福原', '上島', '原', '富田'];
 const DEFAULT_SCHEDULE_URL = 'https://raw.githubusercontent.com/gateofzen/schedule-storage/main/';
 const DEFAULT_CLIENT_ID = '626776231016-51k8d3ckbm8ovvrjpjkiruakfalsstgi.apps.googleusercontent.com'; // Embedded default; can be overridden in settings
+// Shared Cloudflare Worker (OAuth proxy) — provides refresh_token flow for all doctors.
+// Managed by 前川. Individual users can override with their own Worker URL in settings
+// if they prefer, but the default works out-of-the-box.
+const DEFAULT_WORKER_URL = 'https://overtime-oauth-proxy.gateofzen.workers.dev';
 
 const FOLDER_NAME = '時間外勤務';
 // Scopes: drive.file is per-file (only files this app created), email/openid/profile
@@ -1450,7 +1454,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-e';
+const APP_VERSION = 'v2026.11.19-f';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 // Overtime caps: doctor is expected to clock out by these times unless an extension
@@ -1474,7 +1478,7 @@ const state = {
   currentDoctor: null,
   currentView: 'select',
   shifts: [],          // [{id, clockIn, clockOut, syncedSheetIds:[]}]
-  settings: { clientId: DEFAULT_CLIENT_ID, workerUrl: '', geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 },
+  settings: { clientId: DEFAULT_CLIENT_ID, workerUrl: DEFAULT_WORKER_URL, geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 },
   cache: { folderId: null, sheets: {} }, // sheets: {"2026-05": "spreadsheetId"}
   scheduleCache: {},   // {"2026-05": {data}}
   auth: {
@@ -1503,7 +1507,10 @@ function loadSettings() {
   const s = storageGet(STORAGE_KEYS.settings, null);
   state.settings = {
     clientId:        (s?.clientId)        || DEFAULT_CLIENT_ID,
-    workerUrl:       (s?.workerUrl)       || '',    // Cloudflare Worker URL for OAuth proxy
+    // Use DEFAULT_WORKER_URL if user has never explicitly set workerUrl.
+    // If user explicitly set it to '' (empty), respect that choice (they may have
+    // opted out of PKCE flow on purpose).
+    workerUrl:       (s?.workerUrl !== undefined) ? s.workerUrl : DEFAULT_WORKER_URL,
     geoEnabled:      !!(s?.geoEnabled),
     hospitalLat:     (s?.hospitalLat)     || null,
     hospitalLng:     (s?.hospitalLng)     || null,
@@ -4879,7 +4886,7 @@ function clearAllData() {
   state.currentDoctor = null;
   state.shifts = [];
   state.cache = { folderId: null, sheets: {} };
-  state.settings = { clientId: DEFAULT_CLIENT_ID, workerUrl: '', geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 };
+  state.settings = { clientId: DEFAULT_CLIENT_ID, workerUrl: DEFAULT_WORKER_URL, geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 };
   signOut();
   toast('削除しました', 'success');
   changeDoctor();
