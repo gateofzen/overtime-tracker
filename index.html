@@ -1454,7 +1454,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-f';
+const APP_VERSION = 'v2026.11.19-g';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 // Overtime caps: doctor is expected to clock out by these times unless an extension
@@ -1602,6 +1602,26 @@ function initTokenClient() {
   if (state.auth.email) cfg.hint = state.auth.email;
   state.auth.tokenClient = google.accounts.oauth2.initTokenClient(cfg);
   return true;
+}
+
+// Save the current access token + refresh token + expiration to localStorage.
+// Fire-and-forget ping to the Worker. Called on app startup to keep the Worker
+// warm and confirm reachability. Errors are silently logged to console.
+async function pingWorker() {
+  const url = state.settings.workerUrl;
+  if (!url) return;
+  const workerUrl = url.replace(/\/$/, '');
+  try {
+    const res = await fetch(`${workerUrl}/health`, { method: 'GET', mode: 'cors' });
+    if (res.ok) {
+      const data = await res.json();
+      console.log('[pingWorker] Worker healthy:', data);
+    } else {
+      console.warn('[pingWorker] Worker returned status:', res.status);
+    }
+  } catch (e) {
+    console.warn('[pingWorker] failed:', e.message);
+  }
 }
 
 // Save the current access token + refresh token + expiration to localStorage.
@@ -5351,6 +5371,9 @@ function init() {
   // If we restored a still-valid token, we're already effectively signed in.
   setSyncStatus(isAuthed() ? 'ok' : 'offline');
   if (isAuthed()) scheduleTokenRefresh();
+  // Ping the Worker to keep it warm and confirm it's reachable. Fire-and-forget:
+  // any error is silently logged; user experience is not affected.
+  pingWorker();
 
   // ===== PKCE callback handling =====
   // If the URL has ?code=... we just came back from Google's authorization page.
