@@ -1237,7 +1237,16 @@
         <input type="text" id="client-id-input" placeholder="xxxxxxxxxxx.apps.googleusercontent.com">
         <p class="ink-mute" style="font-size:11px;margin-top:6px;">
           Google Cloud Console で作成した Web application 用の Client ID を入力してください。<br>
-          <strong>Authorized JavaScript origins</strong> に <code>${''}</code><span id="app-origin-display"></span> を登録する必要があります。
+          <strong>Authorized JavaScript origins</strong> に <code id="app-origin-display"></code> を登録する必要があります。
+        </p>
+      </div>
+      <div class="field">
+        <label>Cloudflare Worker URL (推奨)</label>
+        <input type="text" id="worker-url-input" placeholder="https://xxx.workers.dev">
+        <p class="ink-mute" style="font-size:11px;margin-top:6px;">
+          Cloudflare Worker を経由することで <strong>refresh_token による長期自動更新</strong> が有効になります (6ヶ月間再認証不要)。<br>
+          未設定の場合は 1時間ごとの再認証が必要になる可能性があります。<br>
+          セットアップ手順は <code>SETUP.md</code> を参照してください。
         </p>
       </div>
       <div id="auth-status-display" style="margin:10px 0 14px;padding:10px 12px;background:var(--paper-soft);border-radius:4px;font-size:12px;line-height:1.6;"></div>
@@ -1426,7 +1435,10 @@ const DEFAULT_SCHEDULE_URL = 'https://raw.githubusercontent.com/gateofzen/schedu
 const DEFAULT_CLIENT_ID = '626776231016-51k8d3ckbm8ovvrjpjkiruakfalsstgi.apps.googleusercontent.com'; // Embedded default; can be overridden in settings
 
 const FOLDER_NAME = '時間外勤務';
-const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// Scopes: drive.file is per-file (only files this app created), email/openid/profile
+// let us fetch the user's Google account email for display and use as login_hint on
+// silent refresh. Space-separated string per GIS API.
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file email openid profile';
 const STORAGE_KEYS = {
   doctor:   'overtime_current_doctor',
   settings: 'overtime_settings',
@@ -1437,7 +1449,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-b';
+const APP_VERSION = 'v2026.11.19-d';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 // Overtime caps: doctor is expected to clock out by these times unless an extension
@@ -1461,7 +1473,7 @@ const state = {
   currentDoctor: null,
   currentView: 'select',
   shifts: [],          // [{id, clockIn, clockOut, syncedSheetIds:[]}]
-  settings: { clientId: DEFAULT_CLIENT_ID, geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 },
+  settings: { clientId: DEFAULT_CLIENT_ID, workerUrl: '', geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 },
   cache: { folderId: null, sheets: {} }, // sheets: {"2026-05": "spreadsheetId"}
   scheduleCache: {},   // {"2026-05": {data}}
   auth: {
@@ -1490,6 +1502,7 @@ function loadSettings() {
   const s = storageGet(STORAGE_KEYS.settings, null);
   state.settings = {
     clientId:        (s?.clientId)        || DEFAULT_CLIENT_ID,
+    workerUrl:       (s?.workerUrl)       || '',    // Cloudflare Worker URL for OAuth proxy
     geoEnabled:      !!(s?.geoEnabled),
     hospitalLat:     (s?.hospitalLat)     || null,
     hospitalLng:     (s?.hospitalLng)     || null,
@@ -1770,29 +1783,31 @@ async function handlePKCECallback() {
   if (returnedState !== savedState) throw new Error('State mismatch (CSRF check failed)');
   if (!verifier) throw new Error('PKCE verifier missing (session storage cleared?)');
 
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  // Exchange the authorization code for tokens via the Cloudflare Worker proxy.
+  // The Worker adds the client_secret (kept server-side) before forwarding to Google.
+  if (!state.settings.workerUrl) {
+    throw new Error('Worker URL が設定されていません。設定タブで Cloudflare Worker の URL を入力してください。');
+  }
+  const workerUrl = state.settings.workerUrl.replace(/\/$/, '');
+  const res = await fetch(`${workerUrl}/token/exchange`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: state.settings.clientId,
-      code: code,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      code,
       code_verifier: verifier,
-      grant_type: 'authorization_code',
-      redirect_uri: getRedirectUri()
-    })
+      redirect_uri: getRedirectUri(),
+    }),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.error_description || data.error || 'Token exchange failed');
+  if (!res.ok) {
+    throw new Error(data.error_description || data.error || `Token exchange failed: ${res.status}`);
+  }
 
-  // Log the response so we can tell in DevTools whether Google actually returned
-  // refresh_token. If Google doesn't return one, long-term silent auth won't work
-  // regardless of what our code does.
-  console.log('[PKCE] token exchange response:', {
+  console.log('[PKCE] token exchange via Worker:', {
     has_access_token: !!data.access_token,
     has_refresh_token: !!data.refresh_token,
     expires_in: data.expires_in,
     scope: data.scope,
-    token_type: data.token_type,
   });
 
   state.auth.accessToken = data.access_token;
@@ -1836,14 +1851,12 @@ async function handlePKCECallback() {
 // No popup, no redirect, no user interaction.
 async function refreshAccessTokenWithRefreshToken() {
   if (!state.auth.refreshToken) throw new Error('No refresh token');
-  const res = await fetch('https://oauth2.googleapis.com/token', {
+  if (!state.settings.workerUrl) throw new Error('Worker URL 未設定');
+  const workerUrl = state.settings.workerUrl.replace(/\/$/, '');
+  const res = await fetch(`${workerUrl}/token/refresh`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: state.settings.clientId,
-      refresh_token: state.auth.refreshToken,
-      grant_type: 'refresh_token'
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_token: state.auth.refreshToken }),
   });
   const data = await res.json();
   if (!res.ok) {
@@ -3478,6 +3491,7 @@ function showView(name) {
   if (name === 'monthly') renderMonthly();
   if (name === 'settings') {
     document.getElementById('client-id-input').value = state.settings.clientId || '';
+    document.getElementById('worker-url-input').value = state.settings.workerUrl || '';
     document.getElementById('geo-enabled').checked = !!state.settings.geoEnabled;
     document.getElementById('geo-radius').value = state.settings.geoRadius || 150;
     updateGeoStatus();
@@ -3521,6 +3535,8 @@ function updateAuthStatusDisplay() {
     rows.push(`アカウント: <strong>${state.auth.email}</strong>`);
   } else if (saved && saved.email) {
     rows.push(`アカウント: <strong>${saved.email}</strong>`);
+  } else if (hasAccessToken) {
+    rows.push('アカウント: <em>(取得中... 次回サインイン時に表示されます)</em>');
   } else {
     rows.push('アカウント: (未サインイン)');
   }
@@ -3541,6 +3557,11 @@ function updateAuthStatusDisplay() {
     rows.push('<span style="color:var(--ink-mute);">localStorage: ✓ 動作 (トークンは永続化されます)</span>');
   } else {
     rows.push('<span style="color:var(--terracotta);">localStorage: ✗ 使用不可 (プライベートモード? → 毎回サインインが必要)</span>');
+  }
+  if (state.settings.workerUrl) {
+    rows.push('<span style="color:var(--ink-mute);">認証方式: PKCE (Worker経由) — refresh_token による長期自動更新</span>');
+  } else {
+    rows.push('<span style="color:var(--terracotta);">認証方式: GIS Implicit — Worker URL 未設定のため 1時間で失効</span>');
   }
 
   // Instructions if problem
@@ -4737,6 +4758,8 @@ function specifyTimeAction() {
 
 function handleSaveClientId() {
   state.settings.clientId = document.getElementById('client-id-input').value.trim();
+  const workerInput = document.getElementById('worker-url-input');
+  if (workerInput) state.settings.workerUrl = workerInput.value.trim().replace(/\/$/, '');
   saveSettings();
   // Reset token client to use new ID
   state.auth.tokenClient = null;
@@ -4753,18 +4776,27 @@ async function startSignIn() {
     showView('settings');
     return;
   }
+  // Prefer PKCE Authorization Code Flow when the Worker URL is configured.
+  // This gives us a refresh_token, letting the app silently renew access tokens
+  // for months without any user interaction (via the Worker proxy holding
+  // client_secret). If Worker URL is not set, fall back to GIS Implicit Flow
+  // (limited to ~1 hour per sign-in).
+  if (state.settings.workerUrl) {
+    try {
+      setSyncStatus('busy', 'サインイン中…');
+      await startPKCESignIn();
+      // startPKCESignIn triggers a full-page redirect to Google, so no code after runs
+    } catch (e) {
+      console.error(e);
+      setSyncStatus('warn');
+      toast('サインイン開始失敗: ' + e.message, 'error');
+    }
+    return;
+  }
+  // Fallback: GIS Implicit Flow (no refresh_token)
   try {
     setSyncStatus('busy', 'サインイン中…');
-    // We use GIS Implicit Flow, not PKCE Authorization Code Flow.
-    // Rationale: Google's Web-application OAuth clients require client_secret at the
-    // token endpoint (even with PKCE). Since we can't safely embed a client_secret in
-    // a public browser app, PKCE flow returns "client_secret is missing" errors.
-    // GIS Implicit Flow is Google's recommended path for browser-only apps.
-    // Silent refresh (prompt='') keeps the session alive as long as the user has a
-    // valid Google session in the browser, and localStorage persistence + proactive
-    // background refresh minimises visible re-authentication.
     await requestToken('consent');
-    // Verify the sign-in actually worked (token in memory + in localStorage)
     const savedNow = storageGet(STORAGE_KEYS.auth);
     const hasSaved = !!(savedNow && savedNow.accessToken);
     console.log('[startSignIn] Post-signin state:', {
@@ -4846,7 +4878,7 @@ function clearAllData() {
   state.currentDoctor = null;
   state.shifts = [];
   state.cache = { folderId: null, sheets: {} };
-  state.settings = { clientId: DEFAULT_CLIENT_ID, geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 };
+  state.settings = { clientId: DEFAULT_CLIENT_ID, workerUrl: '', geoEnabled: false, hospitalLat: null, hospitalLng: null, geoRadius: 150 };
   signOut();
   toast('削除しました', 'success');
   changeDoctor();
@@ -5312,10 +5344,31 @@ function init() {
   if (isAuthed()) scheduleTokenRefresh();
 
   // ===== PKCE callback handling =====
-  // Clean up any leftover PKCE-flow URL params from earlier experiments. GIS Implicit
-  // Flow doesn't use redirect callbacks, so ?code=... would only be a stale remnant
-  // that could cause spurious sign-in prompts if we tried to exchange it.
+  // If the URL has ?code=... we just came back from Google's authorization page.
+  // Exchange the code for tokens via the Cloudflare Worker proxy.
   const urlParams = new URLSearchParams(window.location.search);
+  if ((urlParams.has('code') || urlParams.has('error')) && state.settings.workerUrl) {
+    handlePKCECallback().then(() => {
+      setSyncStatus('ok');
+      toast('Google にサインインしました', 'success');
+      if (state.currentDoctor) {
+        showView('clock');
+        refreshTotals().catch(() => {});
+        syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
+        setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
+      } else {
+        showView('select');
+      }
+    }).catch(e => {
+      console.error('PKCE callback error:', e);
+      setSyncStatus('warn');
+      toast('サインイン処理に失敗: ' + e.message, 'error');
+      showView(state.currentDoctor ? 'auth' : 'select');
+    });
+    return;
+  }
+
+  // Otherwise, clean up any leftover URL params (e.g. from cancelled OAuth flows)
   const staleKeys = ['code', 'state', 'scope', 'authuser', 'prompt', 'error', 'error_description'];
   const hasStale = staleKeys.some(k => urlParams.has(k));
   if (hasStale) {
