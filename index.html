@@ -1239,6 +1239,7 @@
           Google Cloud Console で作成した Web application 用の Client ID を入力してください。
         </p>
       </div>
+      <div id="auth-status-display" style="margin:10px 0 14px;padding:10px 12px;background:var(--paper-soft);border-radius:4px;font-size:12px;line-height:1.6;"></div>
       <div class="btn-row">
         <button class="btn" data-action="save-client-id">保存</button>
         <button class="btn outline" data-action="signout" id="signout-btn" style="display:none;">サインアウト</button>
@@ -1422,6 +1423,7 @@ const SHEETS_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const STORAGE_KEYS = {
   doctor:   'overtime_current_doctor',
   settings: 'overtime_settings',
+  auth:     'overtime_auth',          // {accessToken, expiresAt, email}
   shifts:   (doc) => `overtime_shifts_${doc}`,
   cache:    (doc) => `overtime_cache_${doc}`, // {folderId, sheets: {YYYY-MM: spreadsheetId}}
 };
@@ -1441,9 +1443,12 @@ const state = {
   auth: {
     tokenClient: null,
     accessToken: null,
+    refreshToken: null,        // From PKCE flow — used to refresh access_token silently
     expiresAt: 0,
+    email: null,               // Google account email, used as login_hint for silent auth
     pendingResolve: null,
     pendingReject: null,
+    refreshTimer: null,
   },
   syncStatus: 'unknown', // 'ok' | 'busy' | 'warn' | 'offline' | 'unknown'
   monthlyTotals: {},   // {"2026-05": "8:25"}
@@ -1513,7 +1518,7 @@ function gisReady() { return typeof google !== 'undefined' && google.accounts &&
 function initTokenClient() {
   if (!gisReady() || !state.settings.clientId) return false;
   if (state.auth.tokenClient) return true;
-  state.auth.tokenClient = google.accounts.oauth2.initTokenClient({
+  const cfg = {
     client_id: state.settings.clientId,
     scope: SHEETS_SCOPE,
     callback: (resp) => {
@@ -1526,13 +1531,90 @@ function initTokenClient() {
       }
       state.auth.accessToken = resp.access_token;
       state.auth.expiresAt = Date.now() + (resp.expires_in - 30) * 1000;
+      // Try to remember which account was used, so we can use it as login_hint later.
+      // This lets silent auth succeed even after Google session/cookie changes.
+      try {
+        // Extract email from access token via the userinfo endpoint (best-effort, non-blocking)
+        fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { 'Authorization': `Bearer ${resp.access_token}` }
+        }).then(r => r.json()).then(info => {
+          if (info.email && info.email !== state.auth.email) {
+            state.auth.email = info.email;
+            persistAuth();
+          }
+        }).catch(() => {});
+      } catch {}
+      persistAuth();
+      scheduleTokenRefresh();
       const r = state.auth.pendingResolve;
       state.auth.pendingResolve = null;
       state.auth.pendingReject = null;
       if (r) r(resp.access_token);
     }
-  });
+  };
+  // If we know the previously used email, hint it — helps silent auth succeed
+  // even if third-party cookies are restricted.
+  if (state.auth.email) cfg.hint = state.auth.email;
+  state.auth.tokenClient = google.accounts.oauth2.initTokenClient(cfg);
   return true;
+}
+
+// Save the current access token + refresh token + expiration to localStorage.
+// refresh_token persists across sessions and lets us silently refresh access
+// tokens for months without any user interaction.
+function persistAuth() {
+  if (state.auth.accessToken || state.auth.refreshToken) {
+    storageSet(STORAGE_KEYS.auth, {
+      accessToken: state.auth.accessToken || null,
+      refreshToken: state.auth.refreshToken || null,
+      expiresAt: state.auth.expiresAt || 0,
+      email: state.auth.email || null,
+    });
+  }
+}
+
+// Restore token from localStorage on app start. If access token is still valid,
+// we can use it immediately; otherwise the refresh token can silently get a new one.
+function loadPersistedAuth() {
+  const saved = storageGet(STORAGE_KEYS.auth);
+  if (!saved) return;
+  if (saved.email) state.auth.email = saved.email;
+  if (saved.refreshToken) state.auth.refreshToken = saved.refreshToken;
+  if (saved.accessToken && saved.expiresAt && Date.now() < saved.expiresAt) {
+    state.auth.accessToken = saved.accessToken;
+    state.auth.expiresAt = saved.expiresAt;
+  }
+}
+
+// Schedule a background silent refresh 5 min before the token expires,
+// so an actively-open app never sees an "expired token" moment.
+function scheduleTokenRefresh() {
+  if (state.auth.refreshTimer) {
+    clearTimeout(state.auth.refreshTimer);
+    state.auth.refreshTimer = null;
+  }
+  if (!state.auth.expiresAt) return;
+  const msUntilRefresh = state.auth.expiresAt - Date.now() - 5 * 60 * 1000;
+  if (msUntilRefresh <= 0) {
+    // Already close to expiration — refresh immediately
+    (async () => {
+      try { await ensureToken(); } catch (e) { console.warn('immediate refresh failed:', e); }
+    })();
+    return;
+  }
+  state.auth.refreshTimer = setTimeout(async () => {
+    state.auth.refreshTimer = null;
+    try {
+      // Prefer refresh_token (silent), fall back to GIS silent auth
+      if (state.auth.refreshToken) {
+        await refreshAccessTokenWithRefreshToken();
+      } else {
+        await requestToken('');
+      }
+    } catch (e) {
+      console.warn('background token refresh failed:', e);
+    }
+  }, msUntilRefresh);
 }
 
 function requestToken(prompt = '') {
@@ -1553,11 +1635,207 @@ function requestToken(prompt = '') {
   });
 }
 
+/* ================================================== PKCE Authorization Code Flow ================================================== */
+// This is the preferred sign-in method. Unlike GIS Implicit Flow (which only issues
+// access tokens that expire after 1 hour), PKCE gives us a refresh_token that we
+// can use to silently refresh access tokens for months without any popup or redirect.
+// The refresh_token stays valid until:
+//   - the user explicitly signs out (revoke)
+//   - the user revokes access at https://myaccount.google.com/permissions
+//   - 6 months of inactivity
+
+// Base64URL encoding (no padding, +/= replaced)
+function base64URLEncode(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Generate PKCE code_verifier + SHA-256 challenge
+async function generatePKCE() {
+  const buf = new Uint8Array(32);
+  crypto.getRandomValues(buf);
+  const verifier = base64URLEncode(buf);
+  const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+  const challenge = base64URLEncode(new Uint8Array(hash));
+  return { verifier, challenge };
+}
+
+// The redirect URI must exactly match what's registered in Google Cloud Console.
+// We use the current page URL so no separate callback page is needed.
+function getRedirectUri() {
+  return window.location.origin + window.location.pathname;
+}
+
+function randomState() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  return base64URLEncode(b);
+}
+
+// Start PKCE sign-in by redirecting to Google's authorization endpoint.
+// After the user consents, Google redirects back with ?code=... which
+// handlePKCECallback() below will process.
+async function startPKCESignIn() {
+  if (!state.settings.clientId) throw new Error('Client ID が未設定です');
+
+  const { verifier, challenge } = await generatePKCE();
+  const stateToken = randomState();
+
+  sessionStorage.setItem('pkce_verifier', verifier);
+  sessionStorage.setItem('pkce_state', stateToken);
+
+  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  url.searchParams.set('client_id', state.settings.clientId);
+  url.searchParams.set('redirect_uri', getRedirectUri());
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('scope', SHEETS_SCOPE + ' openid email');
+  url.searchParams.set('code_challenge', challenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  url.searchParams.set('access_type', 'offline');  // request refresh_token
+  url.searchParams.set('prompt', 'consent');        // force refresh_token issue
+  url.searchParams.set('state', stateToken);
+  url.searchParams.set('include_granted_scopes', 'true');
+  if (state.auth.email) url.searchParams.set('login_hint', state.auth.email);
+
+  window.location.href = url.toString();
+}
+
+// Detect a PKCE redirect callback (URL has ?code=... or ?error=...).
+// Returns true if it processed a callback (whether success or error), false if none.
+async function handlePKCECallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  const returnedState = params.get('state');
+  const error = params.get('error');
+
+  if (!code && !error) return false;
+
+  // Clear the URL params early so a refresh doesn't retry
+  const cleanUrl = window.location.origin + window.location.pathname + window.location.hash;
+  window.history.replaceState({}, '', cleanUrl);
+
+  if (error) {
+    throw new Error('OAuth error: ' + error);
+  }
+
+  const savedState = sessionStorage.getItem('pkce_state');
+  const verifier = sessionStorage.getItem('pkce_verifier');
+  sessionStorage.removeItem('pkce_state');
+  sessionStorage.removeItem('pkce_verifier');
+
+  if (returnedState !== savedState) throw new Error('State mismatch (CSRF check failed)');
+  if (!verifier) throw new Error('PKCE verifier missing (session storage cleared?)');
+
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: state.settings.clientId,
+      code: code,
+      code_verifier: verifier,
+      grant_type: 'authorization_code',
+      redirect_uri: getRedirectUri()
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || data.error || 'Token exchange failed');
+
+  // Log the response so we can tell in DevTools whether Google actually returned
+  // refresh_token. If Google doesn't return one, long-term silent auth won't work
+  // regardless of what our code does.
+  console.log('[PKCE] token exchange response:', {
+    has_access_token: !!data.access_token,
+    has_refresh_token: !!data.refresh_token,
+    expires_in: data.expires_in,
+    scope: data.scope,
+    token_type: data.token_type,
+  });
+
+  state.auth.accessToken = data.access_token;
+  if (data.refresh_token) state.auth.refreshToken = data.refresh_token;
+  state.auth.expiresAt = Date.now() + (data.expires_in - 30) * 1000;
+
+  // Fetch user email for future login_hint
+  try {
+    const info = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { 'Authorization': `Bearer ${data.access_token}` }
+    }).then(r => r.json());
+    if (info.email) state.auth.email = info.email;
+  } catch {}
+
+  persistAuth();
+  // Verify the write actually landed in localStorage — surface a warning to the user
+  // if it didn't (e.g. private mode, storage full, or storage disabled).
+  try {
+    const readBack = storageGet(STORAGE_KEYS.auth);
+    console.log('[PKCE] persisted auth after sign-in:', {
+      hasAccessToken: !!readBack?.accessToken,
+      hasRefreshToken: !!readBack?.refreshToken,
+      expiresAt: readBack?.expiresAt ? new Date(readBack.expiresAt).toISOString() : null,
+    });
+    if (!readBack || !readBack.refreshToken) {
+      // Warn: this session will work but the next reload will require another sign-in
+      if (!data.refresh_token) {
+        toast('注意: Google が refresh_token を返しませんでした。次回サインインが必要になる可能性があります。', 'warn');
+      } else {
+        toast('注意: refresh_token を localStorage に保存できませんでした。', 'warn');
+      }
+    }
+  } catch (e) {
+    console.warn('[PKCE] localStorage verify failed:', e);
+  }
+  scheduleTokenRefresh();
+  return true;
+}
+
+// Use refresh_token to get a new access_token, entirely in the background.
+// No popup, no redirect, no user interaction.
+async function refreshAccessTokenWithRefreshToken() {
+  if (!state.auth.refreshToken) throw new Error('No refresh token');
+  const res = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: state.settings.clientId,
+      refresh_token: state.auth.refreshToken,
+      grant_type: 'refresh_token'
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    // invalid_grant means the refresh token is no longer valid; clear it so we
+    // fall back to interactive sign-in next time.
+    if (data.error === 'invalid_grant') {
+      state.auth.refreshToken = null;
+      persistAuth();
+    }
+    throw new Error(data.error_description || data.error || 'Refresh failed');
+  }
+  state.auth.accessToken = data.access_token;
+  state.auth.expiresAt = Date.now() + (data.expires_in - 30) * 1000;
+  // Google sometimes rotates the refresh token; keep the new one when it does
+  if (data.refresh_token) state.auth.refreshToken = data.refresh_token;
+  persistAuth();
+  scheduleTokenRefresh();
+  return data.access_token;
+}
+
 async function ensureToken() {
   if (state.auth.accessToken && Date.now() < state.auth.expiresAt) {
     return state.auth.accessToken;
   }
-  // try silent refresh
+  // Preferred: silently refresh via refresh_token (no popup, no redirect)
+  if (state.auth.refreshToken) {
+    try {
+      return await refreshAccessTokenWithRefreshToken();
+    } catch (e) {
+      console.warn('refresh_token flow failed:', e);
+      // fall through to GIS silent auth as a backup
+    }
+  }
+  // Fallback: legacy GIS silent auth (requires user's Google session)
   try {
     return await requestToken('');
   } catch (e) {
@@ -1570,11 +1848,27 @@ function isAuthed() {
 }
 
 function signOut() {
-  if (state.auth.accessToken) {
-    try { google.accounts.oauth2.revoke(state.auth.accessToken, () => {}); } catch {}
+  // Revoke refresh_token if we have one (preferred — this invalidates access at Google's end);
+  // otherwise revoke the access_token.
+  const tokenToRevoke = state.auth.refreshToken || state.auth.accessToken;
+  if (tokenToRevoke) {
+    try {
+      fetch('https://oauth2.googleapis.com/revoke?token=' + encodeURIComponent(tokenToRevoke), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      }).catch(() => {});
+    } catch {}
   }
   state.auth.accessToken = null;
+  state.auth.refreshToken = null;
   state.auth.expiresAt = 0;
+  state.auth.email = null;
+  state.auth.tokenClient = null;
+  if (state.auth.refreshTimer) {
+    clearTimeout(state.auth.refreshTimer);
+    state.auth.refreshTimer = null;
+  }
+  try { localStorage.removeItem(STORAGE_KEYS.auth); } catch {}
   setSyncStatus('offline');
   toast('サインアウトしました', 'success');
   showView('auth');
@@ -2987,7 +3281,37 @@ function showView(name) {
     document.getElementById('geo-radius').value = state.settings.geoRadius || 150;
     updateGeoStatus();
     updateShortcutUrls();
+    updateAuthStatusDisplay();
+    // Show sign-out button if authenticated
+    const signoutBtn = document.getElementById('signout-btn');
+    if (signoutBtn) signoutBtn.style.display = isAuthed() ? '' : 'none';
   }
+}
+
+// Display authentication state so the user can verify whether PKCE / refresh_token
+// is actually working, without needing DevTools access.
+function updateAuthStatusDisplay() {
+  const el = document.getElementById('auth-status-display');
+  if (!el) return;
+  const saved = storageGet(STORAGE_KEYS.auth);
+  const hasAccessToken = !!(saved && saved.accessToken && saved.expiresAt && Date.now() < saved.expiresAt);
+  const hasRefreshToken = !!(saved && saved.refreshToken);
+  const expiresIn = saved && saved.expiresAt ? Math.max(0, Math.floor((saved.expiresAt - Date.now()) / 60000)) : null;
+
+  const rows = [];
+  if (state.auth.email) {
+    rows.push(`アカウント: <strong>${state.auth.email}</strong>`);
+  } else if (saved && saved.email) {
+    rows.push(`アカウント: <strong>${saved.email}</strong>`);
+  } else {
+    rows.push('アカウント: (未サインイン)');
+  }
+  rows.push(`アクセストークン: ${hasAccessToken ? `✓ 有効 (残り約${expiresIn}分)` : '✗ 無効/失効'}`);
+  rows.push(`自動更新 (refresh_token): ${hasRefreshToken ? '✓ 有効 - リロード後も自動的にサインイン' : '✗ 未取得 - リロードで再度サインインが必要'}`);
+  if (!hasRefreshToken && hasAccessToken) {
+    rows.push('<span style="color:var(--terracotta);">→ 「サインアウト」→ 「サインイン」で再取得してください。<br>失敗する場合は Google Cloud Console の設定を確認してください。</span>');
+  }
+  el.innerHTML = rows.join('<br>');
 }
 
 function selectDoctor(name) {
@@ -4179,14 +4503,14 @@ async function startSignIn() {
   }
   try {
     setSyncStatus('busy', 'サインイン中…');
-    await requestToken('consent');
-    setSyncStatus('ok');
-    toast('Google にサインインしました', 'success');
-    // Try to set up folder lazily; just navigate to clock
-    showView('clock');
-    refreshTotals().catch(() => {});
-    // Sync shift log with Drive so this device can generate accurate attendance records
-    syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
+    // PKCE Authorization Code Flow: redirects to Google's login page.
+    // After the user consents, they come back with ?code=... which init() will
+    // process via handlePKCECallback(), giving us access_token AND refresh_token.
+    // This means all subsequent access token refreshes are fully silent — no popup,
+    // no re-consent, no redirect. The refresh_token stays valid until the user
+    // signs out or revokes access at https://myaccount.google.com/permissions
+    await startPKCESignIn();
+    // startPKCESignIn navigates away, so we never reach here on success
   } catch (e) {
     console.error(e);
     setSyncStatus('warn');
@@ -4706,9 +5030,37 @@ function bindEvents() {
 function init() {
   loadSettings();
   loadDoctorState();
+  loadPersistedAuth();  // Restore access token / refresh token from previous session
   bindEvents();
   renderDoctorSelect();
-  setSyncStatus('offline');
+  // If we restored a still-valid token, we're already effectively signed in.
+  setSyncStatus(isAuthed() ? 'ok' : 'offline');
+  if (isAuthed()) scheduleTokenRefresh();
+
+  // ===== PKCE callback handling =====
+  // If the URL has ?code=... we just came back from Google's authorization page.
+  // Exchange the code for tokens before doing anything else.
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.has('code') || urlParams.has('error')) {
+    handlePKCECallback().then(() => {
+      setSyncStatus('ok');
+      toast('Google にサインインしました', 'success');
+      if (state.currentDoctor) {
+        showView('clock');
+        refreshTotals().catch(() => {});
+        syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
+        setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
+      } else {
+        showView('select');
+      }
+    }).catch(e => {
+      console.error('PKCE callback error:', e);
+      setSyncStatus('warn');
+      toast('サインイン処理に失敗: ' + e.message, 'error');
+      showView(state.currentDoctor ? 'auth' : 'select');
+    });
+    return;
+  }
 
   // ===== Check for auto-action URL params first =====
   const params = parseUrlParams();
@@ -4736,26 +5088,44 @@ function init() {
   // ===== Normal flow =====
   if (state.currentDoctor) {
     if (state.settings.clientId) {
-      const tryInit = () => {
-        if (gisReady()) {
-          requestToken('').then(() => {
-            setSyncStatus('ok');
-            showView('clock');
-            refreshTotals().catch(() => {});
-            // Sync shift log with Drive so all devices converge on the same shift history.
-            // This is essential for the attendance record feature — devices that didn't
-            // do the clock-in need to pull the accurate timestamps from Drive.
-            syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
-            // Geo prompt after a short delay
-            setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
-          }).catch(() => {
-            showView('auth');
-          });
-        } else {
-          setTimeout(tryInit, 200);
-        }
-      };
-      tryInit();
+      // Fast path: valid persisted access token — go straight to clock
+      if (isAuthed()) {
+        showView('clock');
+        refreshTotals().catch(() => {});
+        syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
+        setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
+      } else if (state.auth.refreshToken) {
+        // Have refresh token but access token expired: silent refresh
+        refreshAccessTokenWithRefreshToken().then(() => {
+          setSyncStatus('ok');
+          showView('clock');
+          refreshTotals().catch(() => {});
+          syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
+          setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
+        }).catch(e => {
+          console.warn('refresh at startup failed:', e);
+          // Refresh token invalid, need re-auth
+          showView('auth');
+        });
+      } else {
+        // No refresh token: try legacy GIS silent auth as a last resort
+        const tryInit = () => {
+          if (gisReady()) {
+            requestToken('').then(() => {
+              setSyncStatus('ok');
+              showView('clock');
+              refreshTotals().catch(() => {});
+              syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
+              setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
+            }).catch(() => {
+              showView('auth');
+            });
+          } else {
+            setTimeout(tryInit, 200);
+          }
+        };
+        tryInit();
+      }
     } else {
       showView('settings');
     }
