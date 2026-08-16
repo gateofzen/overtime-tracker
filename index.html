@@ -1236,17 +1236,8 @@
         <label>OAuth Client ID</label>
         <input type="text" id="client-id-input" placeholder="xxxxxxxxxxx.apps.googleusercontent.com">
         <p class="ink-mute" style="font-size:11px;margin-top:6px;">
-          Google Cloud Console で作成した Web application 用の Client ID を入力してください。
-        </p>
-      </div>
-      <div class="field">
-        <label>Cloud Console に登録する Redirect URI</label>
-        <div class="shortcut-url">
-          <input type="text" id="redirect-uri-display" readonly>
-          <button class="btn outline" data-action="copy-url" data-url-id="redirect-uri-display">コピー</button>
-        </div>
-        <p class="ink-mute" style="font-size:11px;margin-top:6px;">
-          この URL をコピーして、<a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style="color:var(--terracotta);">Google Cloud Console</a> の OAuth Client ID の「Authorized redirect URIs」に**完全一致で**追加してください (末尾スラッシュ、大小文字を含む)。
+          Google Cloud Console で作成した Web application 用の Client ID を入力してください。<br>
+          <strong>Authorized JavaScript origins</strong> に <code>${''}</code><span id="app-origin-display"></span> を登録する必要があります。
         </p>
       </div>
       <div id="auth-status-display" style="margin:10px 0 14px;padding:10px 12px;background:var(--paper-soft);border-radius:4px;font-size:12px;line-height:1.6;"></div>
@@ -3292,25 +3283,23 @@ function showView(name) {
     updateGeoStatus();
     updateShortcutUrls();
     updateAuthStatusDisplay();
-    // Show the exact redirect URI the app will send to Google, so the user can
-    // paste it into Cloud Console without any manual typing (avoiding trailing-slash
-    // and case-sensitivity mismatches).
-    const redirectDisplay = document.getElementById('redirect-uri-display');
-    if (redirectDisplay) redirectDisplay.value = getRedirectUri();
+    // Show the origin the user needs to whitelist in Cloud Console
+    const originDisplay = document.getElementById('app-origin-display');
+    if (originDisplay) originDisplay.textContent = window.location.origin;
     // Show sign-out button if authenticated
     const signoutBtn = document.getElementById('signout-btn');
     if (signoutBtn) signoutBtn.style.display = isAuthed() ? '' : 'none';
   }
 }
 
-// Display authentication state so the user can verify whether PKCE / refresh_token
-// is actually working, without needing DevTools access.
+// Display authentication state so the user can verify current session status.
+// Uses GIS Implicit Flow (no refresh_token), so we show whether the access token
+// is valid + when it will need silent refresh.
 function updateAuthStatusDisplay() {
   const el = document.getElementById('auth-status-display');
   if (!el) return;
   const saved = storageGet(STORAGE_KEYS.auth);
   const hasAccessToken = !!(saved && saved.accessToken && saved.expiresAt && Date.now() < saved.expiresAt);
-  const hasRefreshToken = !!(saved && saved.refreshToken);
   const expiresIn = saved && saved.expiresAt ? Math.max(0, Math.floor((saved.expiresAt - Date.now()) / 60000)) : null;
 
   const rows = [];
@@ -3321,10 +3310,10 @@ function updateAuthStatusDisplay() {
   } else {
     rows.push('アカウント: (未サインイン)');
   }
-  rows.push(`アクセストークン: ${hasAccessToken ? `✓ 有効 (残り約${expiresIn}分)` : '✗ 無効/失効'}`);
-  rows.push(`自動更新 (refresh_token): ${hasRefreshToken ? '✓ 有効 - リロード後も自動的にサインイン' : '✗ 未取得 - リロードで再度サインインが必要'}`);
-  if (!hasRefreshToken && hasAccessToken) {
-    rows.push('<span style="color:var(--terracotta);">→ 「サインアウト」→ 「サインイン」で再取得してください。<br>失敗する場合は Google Cloud Console の設定を確認してください。</span>');
+  if (hasAccessToken) {
+    rows.push(`状態: ✓ サインイン中 (残り約${expiresIn}分、期限前に自動更新されます)`);
+  } else {
+    rows.push('状態: ✗ 未サインイン');
   }
   el.innerHTML = rows.join('<br>');
 }
@@ -4518,14 +4507,20 @@ async function startSignIn() {
   }
   try {
     setSyncStatus('busy', 'サインイン中…');
-    // PKCE Authorization Code Flow: redirects to Google's login page.
-    // After the user consents, they come back with ?code=... which init() will
-    // process via handlePKCECallback(), giving us access_token AND refresh_token.
-    // This means all subsequent access token refreshes are fully silent — no popup,
-    // no re-consent, no redirect. The refresh_token stays valid until the user
-    // signs out or revokes access at https://myaccount.google.com/permissions
-    await startPKCESignIn();
-    // startPKCESignIn navigates away, so we never reach here on success
+    // We use GIS Implicit Flow, not PKCE Authorization Code Flow.
+    // Rationale: Google's Web-application OAuth clients require client_secret at the
+    // token endpoint (even with PKCE). Since we can't safely embed a client_secret in
+    // a public browser app, PKCE flow returns "client_secret is missing" errors.
+    // GIS Implicit Flow is Google's recommended path for browser-only apps.
+    // Silent refresh (prompt='') keeps the session alive as long as the user has a
+    // valid Google session in the browser, and localStorage persistence + proactive
+    // background refresh minimises visible re-authentication.
+    await requestToken('consent');
+    setSyncStatus('ok');
+    toast('Google にサインインしました', 'success');
+    showView('clock');
+    refreshTotals().catch(() => {});
+    syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
   } catch (e) {
     console.error(e);
     setSyncStatus('warn');
