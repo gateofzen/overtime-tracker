@@ -1148,8 +1148,9 @@
         Google でサインイン
       </button>
       <p style="margin-top:18px;font-size:11px;color:var(--ink-mute);">
-        Client ID が設定されていない場合は、まず「設定」タブで入力してください。
+        Client ID や Worker URL の設定は下の「設定」タブで行います。
       </p>
+      <button class="btn outline" data-action="goto-settings" style="margin-top:12px;width:100%;">⚙ 設定を開く</button>
     </div>
   </div>
 
@@ -1449,7 +1450,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-d';
+const APP_VERSION = 'v2026.11.19-e';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 // Overtime caps: doctor is expected to clock out by these times unless an extension
@@ -5288,6 +5289,7 @@ function bindEvents() {
       case 'reload-today-shift':  state.scheduleCache = {}; renderTodayShift().catch(() => {}); break;
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
+      case 'goto-settings':       showView('settings'); break;
       case 'signout':             signOut(); break;
       case 'save-client-id':      handleSaveClientId(); break;
       case 'export-data':         exportData(); break;
