@@ -1372,6 +1372,27 @@
     </div>
 
     <div class="card">
+      <h2 class="section-title">時間外勤務のルール</h2>
+      <div style="font-size:13px;line-height:1.8;">
+        <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
+          <tr style="border-bottom:1px solid var(--line-soft);">
+            <td style="padding:6px 0;color:var(--ink-soft);">日勤</td>
+            <td style="padding:6px 0;text-align:right;">正規 17:30 / 上限 <strong>18:00</strong></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--line-soft);">
+            <td style="padding:6px 0;color:var(--ink-soft);">夜勤・25勤明け</td>
+            <td style="padding:6px 0;text-align:right;">正規 9:30 / 上限 <strong>10:00</strong></td>
+          </tr>
+        </table>
+        <p class="ink-soft" style="font-size:12px;line-height:1.6;">
+          原則、上限を超える退勤は自動的に上限で丸められます。<br>
+          上限を超えて働いた場合は、退勤打刻時に <strong>理由を付けて延長申請</strong> することで、実退勤時刻が記録されます。<br>
+          後から追加・修正する場合は、打刻履歴の「編集」ボタンから理由を入力できます。
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
       <h2 class="section-title">打刻ログの同期</h2>
       <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
         打刻データ (出勤/退勤時刻) を Google ドライブに保存し、他のデバイスと共有します。
@@ -5235,28 +5256,17 @@ function init() {
   if (isAuthed()) scheduleTokenRefresh();
 
   // ===== PKCE callback handling =====
-  // If the URL has ?code=... we just came back from Google's authorization page.
-  // Exchange the code for tokens before doing anything else.
+  // Clean up any leftover PKCE-flow URL params from earlier experiments. GIS Implicit
+  // Flow doesn't use redirect callbacks, so ?code=... would only be a stale remnant
+  // that could cause spurious sign-in prompts if we tried to exchange it.
   const urlParams = new URLSearchParams(window.location.search);
-  if (urlParams.has('code') || urlParams.has('error')) {
-    handlePKCECallback().then(() => {
-      setSyncStatus('ok');
-      toast('Google にサインインしました', 'success');
-      if (state.currentDoctor) {
-        showView('clock');
-        refreshTotals().catch(() => {});
-        syncShiftLogBidirectional().catch(e => console.warn('shift log sync:', e));
-        setTimeout(() => maybeShowGeoPrompt().catch(() => {}), 1200);
-      } else {
-        showView('select');
-      }
-    }).catch(e => {
-      console.error('PKCE callback error:', e);
-      setSyncStatus('warn');
-      toast('サインイン処理に失敗: ' + e.message, 'error');
-      showView(state.currentDoctor ? 'auth' : 'select');
-    });
-    return;
+  const staleKeys = ['code', 'state', 'scope', 'authuser', 'prompt', 'error', 'error_description'];
+  const hasStale = staleKeys.some(k => urlParams.has(k));
+  if (hasStale) {
+    for (const k of staleKeys) urlParams.delete(k);
+    const url = new URL(window.location.href);
+    url.search = urlParams.toString();
+    window.history.replaceState({}, '', url.toString());
   }
 
   // ===== Check for auto-action URL params first =====
