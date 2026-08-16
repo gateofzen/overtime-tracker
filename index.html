@@ -1243,6 +1243,7 @@
       <div id="auth-status-display" style="margin:10px 0 14px;padding:10px 12px;background:var(--paper-soft);border-radius:4px;font-size:12px;line-height:1.6;"></div>
       <div class="btn-row">
         <button class="btn" data-action="save-client-id">保存</button>
+        <button class="btn" data-action="signin" id="signin-btn" style="display:none;">🔑 サインイン</button>
         <button class="btn outline" data-action="signout" id="signout-btn" style="display:none;">サインアウト</button>
       </div>
     </div>
@@ -1436,7 +1437,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-a';
+const APP_VERSION = 'v2026.11.19-b';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 // Overtime caps: doctor is expected to clock out by these times unless an extension
@@ -1586,13 +1587,31 @@ function initTokenClient() {
 // refresh_token persists across sessions and lets us silently refresh access
 // tokens for months without any user interaction.
 function persistAuth() {
-  if (state.auth.accessToken || state.auth.refreshToken) {
-    storageSet(STORAGE_KEYS.auth, {
-      accessToken: state.auth.accessToken || null,
-      refreshToken: state.auth.refreshToken || null,
-      expiresAt: state.auth.expiresAt || 0,
-      email: state.auth.email || null,
+  if (!state.auth.accessToken && !state.auth.refreshToken) return;
+  const data = {
+    accessToken: state.auth.accessToken || null,
+    refreshToken: state.auth.refreshToken || null,
+    expiresAt: state.auth.expiresAt || 0,
+    email: state.auth.email || null,
+  };
+  try {
+    storageSet(STORAGE_KEYS.auth, data);
+    // Verify: read it back to make sure it actually landed
+    const back = storageGet(STORAGE_KEYS.auth);
+    const ok = back && back.accessToken === data.accessToken && back.expiresAt === data.expiresAt;
+    console.log('[persistAuth]', {
+      wrote_access: !!data.accessToken,
+      wrote_refresh: !!data.refreshToken,
+      expires_in_min: data.expiresAt ? Math.floor((data.expiresAt - Date.now()) / 60000) : null,
+      verified: ok,
     });
+    if (!ok) {
+      console.error('[persistAuth] Write verification FAILED!');
+      toast('警告: 認証情報の保存に失敗しました', 'error');
+    }
+  } catch (e) {
+    console.error('[persistAuth] threw:', e);
+    toast('保存エラー: ' + e.message, 'error');
   }
 }
 
@@ -3467,9 +3486,12 @@ function showView(name) {
     // Show the origin the user needs to whitelist in Cloud Console
     const originDisplay = document.getElementById('app-origin-display');
     if (originDisplay) originDisplay.textContent = window.location.origin;
-    // Show sign-out button if authenticated
+    // Show sign-in or sign-out based on auth status
+    const authed = isAuthed();
+    const signinBtn = document.getElementById('signin-btn');
     const signoutBtn = document.getElementById('signout-btn');
-    if (signoutBtn) signoutBtn.style.display = isAuthed() ? '' : 'none';
+    if (signinBtn) signinBtn.style.display = authed ? 'none' : '';
+    if (signoutBtn) signoutBtn.style.display = authed ? '' : 'none';
   }
 }
 
@@ -4742,6 +4764,22 @@ async function startSignIn() {
     // valid Google session in the browser, and localStorage persistence + proactive
     // background refresh minimises visible re-authentication.
     await requestToken('consent');
+    // Verify the sign-in actually worked (token in memory + in localStorage)
+    const savedNow = storageGet(STORAGE_KEYS.auth);
+    const hasSaved = !!(savedNow && savedNow.accessToken);
+    console.log('[startSignIn] Post-signin state:', {
+      inMemory: !!state.auth.accessToken,
+      inStorage: hasSaved,
+      email: state.auth.email,
+    });
+    if (!state.auth.accessToken) {
+      toast('サインイン失敗: トークンが取得できませんでした', 'error');
+      setSyncStatus('warn');
+      return;
+    }
+    if (!hasSaved) {
+      toast('警告: localStorage に保存できませんでした', 'error');
+    }
     setSyncStatus('ok');
     toast('Google にサインインしました', 'success');
     showView('clock');
