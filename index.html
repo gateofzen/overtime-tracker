@@ -1333,21 +1333,26 @@
             <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
           </tr>
           <tr>
-            <td style="padding:5px;border:1px solid var(--line-soft);">時間外開始</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">時間外開始<br>(正規終了)</td>
             <td style="padding:5px;border:1px solid var(--line-soft);">17:30</td>
             <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
             <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
             <td style="padding:5px;border:1px solid var(--line-soft);">9:30</td>
           </tr>
           <tr>
-            <td style="padding:5px;border:1px solid var(--line-soft);">時間外終了</td>
-            <td style="padding:5px;border:1px solid var(--line-soft);">退勤時刻</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);"><strong>時間外の上限</strong></td>
+            <td style="padding:5px;border:1px solid var(--line-soft);"><strong>18:00</strong></td>
             <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
             <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
-            <td style="padding:5px;border:1px solid var(--line-soft);">翌朝の退勤時刻<br>(9:30以降)</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);"><strong>10:00</strong></td>
           </tr>
         </tbody>
       </table>
+      <p class="ink-soft" style="font-size:12px;line-height:1.6;margin-top:10px;">
+        原則、上限を超える退勤は自動的に上限で丸められます。<br>
+        上限を超えて働いた場合は、退勤打刻時に <strong>理由を付けて延長申請</strong> することで、実退勤時刻が記録されます。<br>
+        後から追加・修正する場合は、打刻履歴の「編集」ボタンから理由を入力できます。
+      </p>
     </div>
 
     <div class="card">
@@ -1368,27 +1373,6 @@
       </p>
       <div class="btn-row">
         <button class="btn" data-action="print-attendance">📋 出勤簿を作成</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2 class="section-title">時間外勤務のルール</h2>
-      <div style="font-size:13px;line-height:1.8;">
-        <table style="width:100%;border-collapse:collapse;margin-bottom:12px;">
-          <tr style="border-bottom:1px solid var(--line-soft);">
-            <td style="padding:6px 0;color:var(--ink-soft);">日勤</td>
-            <td style="padding:6px 0;text-align:right;">正規 17:30 / 上限 <strong>18:00</strong></td>
-          </tr>
-          <tr style="border-bottom:1px solid var(--line-soft);">
-            <td style="padding:6px 0;color:var(--ink-soft);">夜勤・25勤明け</td>
-            <td style="padding:6px 0;text-align:right;">正規 9:30 / 上限 <strong>10:00</strong></td>
-          </tr>
-        </table>
-        <p class="ink-soft" style="font-size:12px;line-height:1.6;">
-          原則、上限を超える退勤は自動的に上限で丸められます。<br>
-          上限を超えて働いた場合は、退勤打刻時に <strong>理由を付けて延長申請</strong> することで、実退勤時刻が記録されます。<br>
-          後から追加・修正する場合は、打刻履歴の「編集」ボタンから理由を入力できます。
-        </p>
       </div>
     </div>
 
