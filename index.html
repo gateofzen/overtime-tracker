@@ -1351,19 +1351,14 @@
             <td style="padding:5px;border:1px solid var(--line-soft);">9:30</td>
           </tr>
           <tr>
-            <td style="padding:5px;border:1px solid var(--line-soft);"><strong>時間外の上限</strong></td>
-            <td style="padding:5px;border:1px solid var(--line-soft);"><strong>18:00</strong></td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">時間外終了</td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">実退勤時刻</td>
             <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
             <td style="padding:5px;border:1px solid var(--line-soft);">—</td>
-            <td style="padding:5px;border:1px solid var(--line-soft);"><strong>10:00</strong></td>
+            <td style="padding:5px;border:1px solid var(--line-soft);">実退勤時刻</td>
           </tr>
         </tbody>
       </table>
-      <p class="ink-soft" style="font-size:12px;line-height:1.6;margin-top:10px;">
-        原則、上限を超える退勤は自動的に上限で丸められます。<br>
-        上限を超えて働いた場合は、退勤打刻時に <strong>理由を付けて延長申請</strong> することで、実退勤時刻が記録されます。<br>
-        後から追加・修正する場合は、打刻履歴の「編集」ボタンから理由を入力できます。
-      </p>
     </div>
 
     <div class="card">
@@ -1454,24 +1449,8 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-g';
+const APP_VERSION = 'v2026.11.19-h';
 const CAP_30MIN = 30 / MIN_PER_DAY;
-
-// Overtime caps: doctor is expected to clock out by these times unless an extension
-// is explicitly requested with a reason. Times are minutes from midnight.
-// - 日勤 rows use 18:00 (30 min past the 17:30 official end)
-// - 夜勤/25勤 clock-out is written on the 明け day row, capped at 10:00 (30 min past 9:30)
-// - 明 (rare — someone clocking in on 明 day itself) same 10:00 cap
-const OT_CAP_MIN_BY_SHIFT = {
-  '日勤':   18 * 60,
-  '夜勤':   10 * 60,
-  '25勤':   10 * 60,
-  '明':     10 * 60,
-};
-const OT_CAP_MIN_BY_CHECK_TYPE = {
-  '日勤日': 18 * 60,
-  '明け日': 10 * 60,
-};
 
 /* ================================================== State ================================================== */
 const state = {
@@ -2642,35 +2621,16 @@ async function syncClockOut(session) {
 
   const spreadsheetId = await getOrCreateMonthlySheet(tYear, tMonth);
 
-  // Determine effective clock-out time considering the overtime cap.
-  // If clock-out is after the cap AND no extendedReason is provided, we cap it.
-  // If a reason is provided, the actual clock-out time is used (extended).
-  const capMin = OT_CAP_MIN_BY_SHIFT[shift];
-  const coRawMin = co.getHours() * 60 + co.getMinutes();
-  const isOverCap = capMin != null && coRawMin > capMin;
-  const applyCap = isOverCap && !session.extendedReason;
-  let effH, effM;
-  if (applyCap) {
-    effH = Math.floor(capMin / 60);
-    effM = capMin % 60;
-  } else {
-    effH = co.getHours();
-    effM = co.getMinutes();
-  }
-  const effMin = effH * 60 + effM;
-  const effFrac = effMin / MIN_PER_DAY;
-
-  // Compute E and F: only write if effective clock-out time is after the cutoff
+  // Write actual clock-out time (no cap applied since caps were removed).
+  const coFrac = (co.getHours() * 60 + co.getMinutes()) / MIN_PER_DAY;
   const eFrac = parseTimeStringToFraction(eTime);
 
   const updates = [];
-  if (effFrac > eFrac) {
+  if (coFrac > eFrac) {
     updates.push({ range: `E${row}`, values: [[eTime]] });
-    updates.push({ range: `F${row}`, values: [[`${effH}:${pad(effM)}`]] });
-    // H column: extension reason. Write it only when actually extended (i.e. over
-    // cap AND reason provided). Otherwise clear so an old reason doesn't linger.
-    const reasonToWrite = (isOverCap && session.extendedReason) ? session.extendedReason : '';
-    updates.push({ range: `H${row}`, values: [[reasonToWrite]] });
+    updates.push({ range: `F${row}`, values: [[`${co.getHours()}:${pad(co.getMinutes())}`]] });
+    // Clear H column (extension reasons are no longer used; ensures stale data is removed)
+    updates.push({ range: `H${row}`, values: [['']] });
   } else {
     // No overtime; clear cells
     updates.push({ range: `E${row}`, values: [['']] });
@@ -2957,28 +2917,8 @@ async function clockInAction() {
 async function clockOutAction() {
   const open = getOpenShift();
   if (!open) { toast('出勤記録がありません', 'error'); return; }
-  const co = new Date();
-
-  // Check overtime cap BEFORE committing the clock-out
-  const shiftType = await getShiftTypeForSession(open);
-  const capMin = OT_CAP_MIN_BY_SHIFT[shiftType];
-  const coMin = co.getHours() * 60 + co.getMinutes();
-
-  if (capMin != null && coMin > capMin) {
-    // Over the cap — ask the user whether to cap or extend with reason
-    const decision = await promptOvertimeCap(shiftType, capMin, co);
-    if (decision === null) return;  // cancelled
-    if (decision.action === 'extend') {
-      open.extendedReason = decision.reason;
-    } else {
-      open.extendedReason = null;  // ensure it's cleared if user chose to cap
-    }
-  } else {
-    // Under the cap, no extension needed
-    open.extendedReason = null;
-  }
-
-  open.clockOut = co.toISOString();
+  open.clockOut = new Date().toISOString();
+  open.extendedReason = null;  // no longer used, but ensure cleared
   saveShifts();
   sessionStorage.setItem('geo_last_clock', String(Date.now()));
   toast('退勤を記録しました', 'success');
@@ -2994,105 +2934,6 @@ async function clockOutAction() {
     }
   }
   renderClock();
-}
-
-// Determine shift type ('日勤'|'夜勤'|'25勤'|'明'|'休'|null) for a session's clock-in date.
-// Reads the current sheet first (if authed), then falls back to the schedule JSON.
-async function getShiftTypeForSession(session) {
-  const ci = new Date(session.clockIn);
-  const ciYear = ci.getFullYear();
-  const ciMonth = ci.getMonth() + 1;
-  const ciDay = ci.getDate();
-  let raw = null;
-  if (isAuthed()) {
-    try {
-      const sid = state.cache.sheets[ymKey(ciYear, ciMonth)];
-      if (sid) {
-        const r = await sheetsValuesGet(sid, `C${ciDay + 3}`, { valueRenderOption: 'FORMATTED_VALUE' });
-        raw = r.values?.[0]?.[0] || null;
-      }
-    } catch {}
-  }
-  if (!raw) {
-    try {
-      const sched = await fetchSchedule(ciYear, ciMonth);
-      raw = shiftFromSchedule(ci, state.currentDoctor, sched);
-    } catch {}
-  }
-  if (!raw) return null;
-  const s = String(raw);
-  if (s.includes('25勤')) return '25勤';
-  if (s.includes('夜勤')) return '夜勤';
-  if (s.includes('明'))   return '明';
-  if (s.includes('日勤')) return '日勤';
-  if (s.includes('休'))   return '休';
-  return null;
-}
-
-// Show a modal asking the user whether to cap their clock-out at the official
-// limit, or to file an extension request with a reason. Returns:
-//   { action: 'cap' }       — user accepted the cap
-//   { action: 'extend', reason: '...' } — user provided a reason
-//   null                    — user cancelled the whole thing
-function promptOvertimeCap(shiftType, capMin, actualCo) {
-  return new Promise((resolve) => {
-    const capH = Math.floor(capMin / 60);
-    const capM = capMin % 60;
-    const capStr = `${pad(capH)}:${pad(capM)}`;
-    const actualStr = `${pad(actualCo.getHours())}:${pad(actualCo.getMinutes())}`;
-    const typeLabel = shiftType === '日勤' ? '日勤' : '夜勤・25勤明け';
-    showModal(`
-      <h3>時間外の上限を超えています</h3>
-      <p style="margin:12px 0;font-size:14px;line-height:1.7;">
-        ${typeLabel}の時間外の上限は <strong>${capStr}</strong> です。<br>
-        現在の退勤時刻は <strong>${actualStr}</strong> で、上限を超過しています。
-      </p>
-      <p style="margin:12px 0;font-size:13px;color:var(--ink-soft);">
-        処理方法を選んでください:
-      </p>
-      <div class="btn-row" style="flex-direction:column;gap:8px;">
-        <button class="btn outline" id="cap-accept">上限 ${capStr} で丸めて記録</button>
-        <button class="btn" id="cap-extend">理由を付けて延長申請 (${actualStr} で記録)</button>
-        <button class="btn outline" id="cap-cancel" style="color:var(--terracotta);border-color:var(--terracotta);">キャンセル</button>
-      </div>
-    `);
-    document.getElementById('cap-accept').addEventListener('click', () => {
-      closeModal();
-      resolve({ action: 'cap' });
-    });
-    document.getElementById('cap-cancel').addEventListener('click', () => {
-      closeModal();
-      resolve(null);
-    });
-    document.getElementById('cap-extend').addEventListener('click', () => {
-      // Second modal: reason input
-      showModal(`
-        <h3>延長申請の理由</h3>
-        <p style="margin:8px 0 14px;font-size:13px;color:var(--ink-soft);line-height:1.6;">
-          上限 (${capStr}) を超えて ${actualStr} まで勤務した理由を入力してください。<br>
-          時間外管理シートの H 列に記録されます。
-        </p>
-        <div class="field">
-          <textarea id="extend-reason" rows="3" style="width:100%;padding:8px;font-family:var(--sans);font-size:13px;" placeholder="例: 重症患者の対応のため"></textarea>
-        </div>
-        <div class="btn-row" style="flex-direction:column;gap:8px;">
-          <button class="btn" id="extend-save">申請する</button>
-          <button class="btn outline" id="extend-back">戻る</button>
-        </div>
-      `);
-      document.getElementById('extend-back').addEventListener('click', () => {
-        closeModal();
-        // Re-open the initial choice modal
-        promptOvertimeCap(shiftType, capMin, actualCo).then(resolve);
-      });
-      document.getElementById('extend-save').addEventListener('click', () => {
-        const reason = document.getElementById('extend-reason').value.trim();
-        if (!reason) { toast('理由を入力してください', 'error'); return; }
-        closeModal();
-        resolve({ action: 'extend', reason });
-      });
-    });
-  });
 }
 
 async function deleteShiftAction(id) {
@@ -3243,10 +3084,6 @@ function renderShiftsList(limit = null) {
     const ci = new Date(s.clockIn);
     const co = s.clockOut ? new Date(s.clockOut) : null;
     const synced = s.syncedSheetIds && s.syncedSheetIds.length > 0;
-    // Show extension reason if it's set (either just applied on clock-out or from history)
-    const reasonBadge = s.extendedReason
-      ? `<div style="margin-top:4px;font-size:11px;color:var(--terracotta);line-height:1.4;">📝 延長申請: ${s.extendedReason}</div>`
-      : '';
     const row = document.createElement('div');
     row.className = 'shift-row' + (synced ? '' : ' unsynced');
     row.innerHTML = `
@@ -3258,7 +3095,6 @@ function renderShiftsList(limit = null) {
         ${co ? `<button class="icon-btn" data-undo-shift="${s.id}" title="退勤を取り消して出勤中に戻す">↶ 退勤取消</button>` : ''}
         <button class="icon-btn danger" data-del-shift="${s.id}" title="この打刻全体を削除">削除</button>
       </div>
-      ${reasonBadge}
     `;
     wrap.appendChild(row);
   }
@@ -3419,13 +3255,6 @@ function openShiftEditor(id, isNew = false) {
         <input type="time" id="edit-out-time" value="${timeValue(shift.clockOut)}" step="60">
       </div>
     </div>
-    <div class="field">
-      <label>延長申請の理由 (上限を超えた場合のみ)</label>
-      <textarea id="edit-reason" rows="2" style="width:100%;padding:8px;font-family:var(--sans);font-size:13px;box-sizing:border-box;" placeholder="日勤は18:00、夜勤/25勤明けは10:00 が上限。それを超えた場合の理由を入力">${shift.extendedReason || ''}</textarea>
-      <p class="ink-mute" style="font-size:11px;margin-top:4px;">
-        空欄の場合、退勤時刻は上限で自動的に丸められます。
-      </p>
-    </div>
     <div class="modal-actions">
       <button class="btn outline" data-modal-close>キャンセル</button>
       <button class="btn" id="modal-save">保存して同期</button>
@@ -3437,7 +3266,6 @@ function openShiftEditor(id, isNew = false) {
     const inTime  = document.getElementById('edit-in-time').value;
     const outDate = document.getElementById('edit-out-date').value;
     const outTime = document.getElementById('edit-out-time').value;
-    const reason  = document.getElementById('edit-reason').value.trim();
 
     if (!inDate || !inTime) { toast('出勤の日付と時刻は必須です', 'error'); return; }
 
@@ -3458,7 +3286,7 @@ function openShiftEditor(id, isNew = false) {
 
     shift.clockIn = newIn;
     shift.clockOut = newOut;
-    shift.extendedReason = reason || null;
+    shift.extendedReason = null;  // no longer used
     shift.syncedSheetIds = [];
     if (isNew) state.shifts.push(shift);
     saveShifts();
@@ -4038,22 +3866,11 @@ async function computeAttendanceData(year, month) {
     '日勤日': 17 * 60 + 30,   // 17:30
     '明け日': 9 * 60 + 30,    // 9:30
   };
-  // Round early departure up to the official end time
+  // Round early departure up to the official end time. (Overtime cap was removed.)
   const roundEndMin = (endMin, endDayType) => {
     const official = OFFICIAL_END_MIN[endDayType];
     if (official != null && endMin < official) return official;
     return endMin;
-  };
-  // Cap late departure DOWN to the overtime cap, unless a reason for extension exists
-  const applyCapMin = (endMin, endDayType, hasReason) => {
-    if (hasReason) return endMin;
-    const cap = OT_CAP_MIN_BY_CHECK_TYPE[endDayType];
-    if (cap != null && endMin > cap) return cap;
-    return endMin;
-  };
-  // Combined: round early departure up + cap late departure down
-  const normalizeEndMin = (endMin, endDayType, hasReason) => {
-    return applyCapMin(roundEndMin(endMin, endDayType), endDayType, hasReason);
   };
   // 10-min slot helpers: 0..143 for 00:00..24:00 in 10-min increments
   const minToStartSlot = (min) => Math.max(0, Math.floor(min / 10));
@@ -4084,7 +3901,7 @@ async function computeAttendanceData(year, month) {
 
       if (sameDay) {
         let endMin = co.getHours() * 60 + co.getMinutes();
-        endMin = normalizeEndMin(endMin, data[startDay].checkType, !!shift.extendedReason);
+        endMin = roundEndMin(endMin, data[startDay].checkType);
         data[startDay].endTime = fmtMin(endMin);
         fillSlots(data[startDay].workSlots, startTotalMin, endMin);
       } else {
@@ -4094,7 +3911,7 @@ async function computeAttendanceData(year, month) {
           const endDay = co.getDate();
           let endMin = co.getHours() * 60 + co.getMinutes();
           if (!data[endDay].checkType) data[endDay].checkType = '明け日';
-          endMin = normalizeEndMin(endMin, data[endDay].checkType, !!shift.extendedReason);
+          endMin = roundEndMin(endMin, data[endDay].checkType);
           data[endDay].endTime = fmtMin(endMin);
           fillSlots(data[endDay].workSlots, 0, endMin);
           filledFromLocal.add(endDay);
