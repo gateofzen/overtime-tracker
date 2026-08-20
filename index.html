@@ -1255,6 +1255,7 @@
         <button class="btn" data-action="save-client-id">保存</button>
         <button class="btn" data-action="signin" id="signin-btn" style="display:none;">🔑 サインイン</button>
         <button class="btn outline" data-action="signout" id="signout-btn" style="display:none;">サインアウト</button>
+        <button class="btn outline" data-action="run-diagnostics">🔍 診断</button>
       </div>
     </div>
 
@@ -1449,7 +1450,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-h';
+const APP_VERSION = 'v2026.11.19-i';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -1584,6 +1585,119 @@ function initTokenClient() {
 }
 
 // Save the current access token + refresh token + expiration to localStorage.
+// Runs a set of diagnostic checks and displays the result in a modal.
+// Especially useful for troubleshooting sign-in failures on restricted networks
+// (e.g. hospital PCs where Cloudflare Workers or Google endpoints may be blocked).
+async function runDiagnostics() {
+  showModal('<h3>診断中...</h3><p><span class="spinner"></span> 各種チェックを実行中です。少々お待ちください。</p>');
+  const results = [];
+  const OK = '<span style="color:#0a7;">✓</span>';
+  const FAIL = '<span style="color:#c33;">✗</span>';
+  const WARN = '<span style="color:#e80;">⚠</span>';
+
+  // 1. Browser capability
+  results.push(`<strong>ブラウザ環境</strong>`);
+  results.push(`${OK} User-Agent: ${navigator.userAgent.substring(0, 80)}${navigator.userAgent.length > 80 ? '…' : ''}`);
+  results.push(`${crypto?.subtle ? OK : FAIL} crypto.subtle (PKCE で必要)`);
+  results.push(`${window.fetch ? OK : FAIL} fetch API`);
+
+  // 2. Storage
+  results.push('<br><strong>ストレージ</strong>');
+  try {
+    const k = '_diag_ls';
+    localStorage.setItem(k, 'test');
+    const v = localStorage.getItem(k);
+    localStorage.removeItem(k);
+    results.push(`${v === 'test' ? OK : FAIL} localStorage の読み書き`);
+  } catch (e) {
+    results.push(`${FAIL} localStorage エラー: ${e.message}`);
+  }
+  try {
+    const k = '_diag_ss';
+    sessionStorage.setItem(k, 'test');
+    const v = sessionStorage.getItem(k);
+    sessionStorage.removeItem(k);
+    results.push(`${v === 'test' ? OK : FAIL} sessionStorage の読み書き (PKCE で必要)`);
+  } catch (e) {
+    results.push(`${FAIL} sessionStorage エラー: ${e.message}`);
+  }
+  results.push(`${navigator.cookieEnabled ? OK : WARN} Cookie 有効`);
+
+  // 3. Auth state
+  results.push('<br><strong>認証状態</strong>');
+  const saved = storageGet(STORAGE_KEYS.auth);
+  results.push(`アカウント: ${saved?.email || state.auth.email || '(未サインイン)'}`);
+  if (saved?.accessToken && saved.expiresAt) {
+    const min = Math.floor((saved.expiresAt - Date.now()) / 60000);
+    results.push(`アクセストークン: ${min > 0 ? `${OK} 有効 (残り${min}分)` : `${FAIL} 失効`}`);
+  } else {
+    results.push(`アクセストークン: ${FAIL} なし`);
+  }
+  results.push(`refresh_token: ${saved?.refreshToken ? OK + ' あり' : WARN + ' なし (PKCE flow 未完了)'}`);
+
+  // 4. Cloudflare Worker connectivity
+  results.push('<br><strong>Cloudflare Worker 疎通</strong>');
+  if (!state.settings.workerUrl) {
+    results.push(`${WARN} Worker URL 未設定`);
+  } else {
+    const workerUrl = state.settings.workerUrl.replace(/\/$/, '');
+    results.push(`URL: ${workerUrl}`);
+    try {
+      const t0 = Date.now();
+      const res = await fetch(`${workerUrl}/health`, { method: 'GET', mode: 'cors' });
+      const ms = Date.now() - t0;
+      if (res.ok) {
+        const data = await res.json();
+        results.push(`${OK} Worker 応答 OK (${ms}ms)`);
+        results.push(`&nbsp;&nbsp;• hasClientId: ${data.hasClientId ? OK : FAIL}`);
+        results.push(`&nbsp;&nbsp;• hasClientSecret: ${data.hasClientSecret ? OK : FAIL}`);
+        results.push(`&nbsp;&nbsp;• allowedOrigins: ${JSON.stringify(data.allowedOrigins)}`);
+      } else {
+        results.push(`${FAIL} Worker 応答エラー: HTTP ${res.status}`);
+      }
+    } catch (e) {
+      results.push(`${FAIL} Worker に接続できません: ${e.message}`);
+      results.push(`${WARN} 病院ネットワークで <code>workers.dev</code> がブロックされている可能性があります`);
+    }
+  }
+
+  // 5. Google endpoint reachability (no-cors, so we can only see if it errors)
+  results.push('<br><strong>Google 疎通</strong>');
+  try {
+    await fetch('https://accounts.google.com/', { method: 'GET', mode: 'no-cors' });
+    results.push(`${OK} accounts.google.com に到達可能`);
+  } catch (e) {
+    results.push(`${FAIL} accounts.google.com に到達できません: ${e.message}`);
+  }
+
+  // 6. Current origin
+  results.push('<br><strong>現在の環境</strong>');
+  results.push(`Origin: ${window.location.origin}`);
+  results.push(`アプリ版: ${APP_VERSION}`);
+
+  // Display modal with results
+  showModal(`
+    <h3>🔍 診断結果</h3>
+    <div style="font-size:12px;line-height:1.7;padding:10px;background:var(--paper-soft);border-radius:4px;max-height:60vh;overflow-y:auto;">
+      ${results.join('<br>')}
+    </div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="btn outline" data-modal-close>閉じる</button>
+      <button class="btn" id="copy-diag">結果をコピー</button>
+    </div>
+  `);
+
+  // Copy diagnostics as plain text
+  document.getElementById('copy-diag').addEventListener('click', () => {
+    const plain = results.join('\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
+    navigator.clipboard.writeText(plain).then(() => {
+      toast('診断結果をクリップボードにコピーしました', 'success');
+    }).catch(() => {
+      toast('コピー失敗', 'error');
+    });
+  });
+}
+
 // Fire-and-forget ping to the Worker. Called on app startup to keep the Worker
 // warm and confirm reachability. Errors are silently logged to console.
 async function pingWorker() {
@@ -5134,6 +5248,7 @@ function bindEvents() {
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
       case 'goto-settings':       showView('settings'); break;
+      case 'run-diagnostics':     runDiagnostics(); break;
       case 'signout':             signOut(); break;
       case 'save-client-id':      handleSaveClientId(); break;
       case 'export-data':         exportData(); break;
