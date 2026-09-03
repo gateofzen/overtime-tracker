@@ -1450,7 +1450,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-i';
+const APP_VERSION = 'v2026.11.19-j';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -3002,14 +3002,59 @@ async function renderTodayShift() {
 
 function getOpenShift() { return state.shifts.find(s => s.clockIn && !s.clockOut) || null; }
 
+// Detect shift type ('日勤'|'夜勤'|'25勤'|'明'|'休'|null) for a given date.
+// Reads sheet C column first (if authed), then falls back to schedule JSON.
+// This is stored on the shift object so downstream logic (attendance record rounding)
+// doesn't have to re-query at output time — critical because those queries can fail
+// silently on a different device.
+async function getShiftTypeForDate(date) {
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  let raw = null;
+  if (isAuthed()) {
+    try {
+      const sid = state.cache.sheets[ymKey(y, m)];
+      if (sid) {
+        const r = await sheetsValuesGet(sid, `C${d + 3}`, { valueRenderOption: 'FORMATTED_VALUE' });
+        raw = r.values?.[0]?.[0] || null;
+      }
+    } catch {}
+  }
+  if (!raw) {
+    try {
+      const sched = await fetchSchedule(y, m);
+      raw = shiftFromSchedule(date, state.currentDoctor, sched);
+    } catch {}
+  }
+  if (!raw) return null;
+  const s = String(raw);
+  if (s.includes('25勤')) return '25勤';
+  if (s.includes('夜勤')) return '夜勤';
+  if (s.includes('明'))   return '明';
+  if (s.includes('日勤')) return '日勤';
+  if (s.includes('休'))   return '休';
+  return null;
+}
+
 async function clockInAction() {
   if (getOpenShift()) { toast('既に出勤中です', 'error'); return; }
+  const now = new Date();
   const session = {
     id: 'sh_' + Date.now(),
-    clockIn: new Date().toISOString(),
+    clockIn: now.toISOString(),
     clockOut: null,
     syncedSheetIds: [],
+    shiftType: null,   // Detected from schedule — used at attendance-record time to
+                        // reliably determine the check type even on other devices
   };
+  // Try to determine shift type up-front. This is best-effort; failure is OK, just means
+  // downstream rounding will fall back to reading the schedule at that time.
+  try {
+    session.shiftType = await getShiftTypeForDate(now);
+  } catch (e) {
+    console.warn('[clockInAction] shift type detection failed:', e);
+  }
   state.shifts.push(session);
   saveShifts();
   sessionStorage.setItem('geo_last_clock', String(Date.now()));
@@ -3033,6 +3078,13 @@ async function clockOutAction() {
   if (!open) { toast('出勤記録がありません', 'error'); return; }
   open.clockOut = new Date().toISOString();
   open.extendedReason = null;  // no longer used, but ensure cleared
+  // Backfill shiftType if this is an older shift that was clocked in before we started
+  // storing shift type. Best-effort; failure is fine.
+  if (!open.shiftType) {
+    try {
+      open.shiftType = await getShiftTypeForDate(new Date(open.clockIn));
+    } catch {}
+  }
   saveShifts();
   sessionStorage.setItem('geo_last_clock', String(Date.now()));
   toast('退勤を記録しました', 'success');
@@ -3401,6 +3453,10 @@ function openShiftEditor(id, isNew = false) {
     shift.clockIn = newIn;
     shift.clockOut = newOut;
     shift.extendedReason = null;  // no longer used
+    // Refresh shiftType based on the (possibly changed) clock-in date
+    try {
+      shift.shiftType = await getShiftTypeForDate(new Date(newIn));
+    } catch { /* keep existing */ }
     shift.syncedSheetIds = [];
     if (isNew) state.shifts.push(shift);
     saveShifts();
@@ -3995,6 +4051,15 @@ async function computeAttendanceData(year, month) {
     for (let s = s0; s < s1; s++) target.add(s);
   };
 
+  // Map from shift type to check type shown in the attendance sheet
+  const SHIFT_TO_CHECK = {
+    '日勤': '日勤日',
+    '夜勤': '夜勤日',
+    '25勤': '日勤夜勤',
+    '明':   '明け日',
+    '休':   '週休日',
+  };
+
   // 2. First, populate from state.shifts
   const filledFromLocal = new Set();
   for (const shift of state.shifts) {
@@ -4003,6 +4068,20 @@ async function computeAttendanceData(year, month) {
     if (ci.getFullYear() !== year || ci.getMonth() + 1 !== month) continue;
     const startDay = ci.getDate();
     const co = shift.clockOut ? new Date(shift.clockOut) : null;
+
+    // If the shift has a stored shiftType (from clock-in), use it to fill in checkType
+    // in case scheduleMap failed. This is the fix for "checkType null → rounding skipped"
+    // seen when the sheet's C column can't be read (e.g. from a different device).
+    if (shift.shiftType && SHIFT_TO_CHECK[shift.shiftType] && !data[startDay].checkType) {
+      data[startDay].checkType = SHIFT_TO_CHECK[shift.shiftType];
+    }
+    // For cross-midnight shifts (夜勤/25勤), also mark next day as 明け日
+    if (co && (shift.shiftType === '夜勤' || shift.shiftType === '25勤')) {
+      const nextDay = co.getDate();
+      if (nextDay !== startDay && nextDay <= daysInMonth && !data[nextDay].checkType) {
+        data[nextDay].checkType = '明け日';
+      }
+    }
 
     data[startDay].startTime = `${pad(ci.getHours())}:${pad(ci.getMinutes())}`;
     filledFromLocal.add(startDay);
@@ -4515,6 +4594,27 @@ async function createAttendanceSheet(year, month) {
   const syncResult = await loadShiftsFromDrive();
   if (syncResult.loaded && syncResult.added > 0) {
     console.log(`Loaded ${syncResult.added} shift(s) from Drive`);
+  }
+
+  // Backfill shiftType for shifts in this month that were clocked in before we started
+  // storing it. Without shiftType, roundEndMin (which rounds early clock-outs up to
+  // the official end time) may not fire, resulting in unrounded clock-out times.
+  let backfilled = 0;
+  for (const shift of state.shifts) {
+    if (shift.shiftType) continue;
+    if (!shift.clockIn) continue;
+    const ci = new Date(shift.clockIn);
+    if (ci.getFullYear() !== year || ci.getMonth() + 1 !== month) continue;
+    try {
+      const t = await getShiftTypeForDate(ci);
+      if (t) { shift.shiftType = t; backfilled++; }
+    } catch {}
+  }
+  if (backfilled > 0) {
+    saveShifts();
+    console.log(`Backfilled shiftType for ${backfilled} old shift(s)`);
+    // Also push the updated log back to Drive so other devices get the fix
+    uploadShiftLog().catch(e => console.warn('shift log upload after backfill:', e));
   }
 
   // Delete existing sheet with same name if it exists
