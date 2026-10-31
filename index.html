@@ -1450,7 +1450,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.10.31-m';
+const APP_VERSION = 'v2026.10.31-n';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -4588,19 +4588,21 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
   // compare directly without TIMEVALUE conversion:
   //   slotFraction = (COLUMN() - 6) * 10 / 1440   ← "F" column is COLUMN() = 6
   //
-  // Four cases:
+  // Coloring rules (slot = (COLUMN()-6)*10/1440 = fraction of day for this 10-min cell):
   //   D=""  E=""  → not colored (週休日 / unused day)
-  //   D=""  E=v   → color 0:00..E  (明け日)
-  //   D=v   E=""  → NOT colored  (日勤未退勤など、終了時刻未確定)
-  //   D=v   E=v   → color D..E   (normal case)
-  // Use ISBLANK rather than `=""`: with numeric-TIME cells, `=""` can behave
-  // inconsistently (treating a cleared cell as 0 rather than empty), so明け日 rows
-  // where D is empty but E has a value weren't being colored.
+  //   D=""  E=v   → color 0:00..E   (明け日 — clock-out only)
+  //   D=v   E=""  + C=夜勤日/日勤夜勤 → color D..24:00  (overnight shift, open-ended)
+  //   D=v   E=""  + 他 → not colored  (日勤未退勤 — avoid 24-hour pink stripe)
+  //   D=v   E=v   → color D..E
+  // ISBLANK handles numeric-TIME cells correctly where `=""` falsely returns FALSE for cleared cells.
   const formula =
-    '=AND(' +
-      'NOT(ISBLANK($E4)),' +                                 // E must have a value
-      '(COLUMN()-6)*10/1440<$E4,' +                          // slot < E
-      'OR(ISBLANK($D4),(COLUMN()-6)*10/1440>=$D4)' +         // slot >= D (or D empty)
+    '=OR(' +
+      // 明け日 pattern: D empty, E has value — color 0..E
+      'AND(ISBLANK($D4),NOT(ISBLANK($E4)),(COLUMN()-6)*10/1440<$E4),' +
+      // Normal pattern: both D and E have values — color D..E
+      'AND(NOT(ISBLANK($D4)),NOT(ISBLANK($E4)),(COLUMN()-6)*10/1440>=$D4,(COLUMN()-6)*10/1440<$E4),' +
+      // Open-ended overnight pattern: D has value, E empty, type is 夜勤日/日勤夜勤 — color D..24:00
+      'AND(NOT(ISBLANK($D4)),ISBLANK($E4),OR($C4="夜勤日",$C4="日勤夜勤"),(COLUMN()-6)*10/1440>=$D4)' +
     ')';
   requests.push({
     addConditionalFormatRule: {
@@ -4636,6 +4638,27 @@ async function createAttendanceSheet(year, month) {
   const doctor = state.currentDoctor;
   const folderId = await ensureFolder();
   const sheetName = `出勤簿_${year}-${pad(month)}_${doctor}`;
+
+  // Ensure the F2 formula on the source month sheet is up to date (migrates old
+  // '=80-F1' to '=80-F1-G35*24'). Done as a blocking await so failures surface
+  // and the user doesn't silently keep seeing the wrong value.
+  const monthKey = ymKey(year, month);
+  let monthSid = state.cache.sheets[monthKey];
+  if (!monthSid) {
+    try {
+      const srcName = `${year}-${pad(month)}_${doctor}`;
+      monthSid = await findSheetInFolder(folderId, srcName);
+      if (monthSid) {
+        state.cache.sheets[monthKey] = monthSid;
+        saveCache();
+      }
+    } catch (e) { console.warn('month sheet lookup for migration:', e); }
+  }
+  if (monthSid) {
+    try {
+      await ensureF2FormulaUpToDate(monthSid);
+    } catch (e) { console.warn('F2 migration:', e); }
+  }
 
   // Sync shift log from Drive first: if this device didn't do the clock-ins,
   // its local state.shifts may be empty and we'd fall back to imprecise D/F reconstruction.
@@ -5156,3 +5179,167 @@ function clearUrlParams() {
 function showAutoSplash(state, opts = {}) {
   // state: 'processing' | 'in_success' | 'out_success' | 'error'
   const splash = document.getElementById('auto-splash');
+  splash.style.display = 'flex';
+  splash.className = 'auto-splash';
+  let html = '';
+  if (state === 'processing') {
+    html = `
+      <div class="glyph-big" style="color:var(--ink-mute);">時</div>
+      <div class="auto-status">処理中</div>
+      <div class="auto-sub"><span class="spinner"></span> 打刻を記録しています…</div>
+    `;
+  } else if (state === 'in_success') {
+    splash.classList.add('in');
+    html = `
+      <div class="glyph-big">出</div>
+      <div class="auto-status">出勤しました</div>
+      <div class="auto-time">${opts.time || ''}</div>
+      <div class="auto-doctor">${opts.doctor || ''}　${opts.date || ''}</div>
+      <div class="auto-sub">${opts.synced ? '✓ スプレッドシートに同期済み' : '⌛ ローカルに保存しました (後で同期)'}</div>
+      <div class="auto-actions">
+        <button class="btn outline" data-action="splash-close">閉じる</button>
+        <button class="btn" data-action="splash-open-app">アプリを開く</button>
+      </div>
+    `;
+  } else if (state === 'out_success') {
+    splash.classList.add('out');
+    html = `
+      <div class="glyph-big">退</div>
+      <div class="auto-status">退勤しました</div>
+      <div class="auto-time">${opts.time || ''}</div>
+      <div class="auto-doctor">${opts.doctor || ''}　勤務時間 ${opts.duration || ''}</div>
+      <div class="auto-sub">${opts.synced ? '✓ スプレッドシートに同期済み' : '⌛ ローカルに保存しました (後で同期)'}<br>${opts.totalSoFar ? '今月の合計: <span class="mono">' + opts.totalSoFar + '</span>' : ''}</div>
+      <div class="auto-actions">
+        <button class="btn outline" data-action="splash-close">閉じる</button>
+        <button class="btn" data-action="splash-open-app">アプリを開く</button>
+      </div>
+    `;
+  } else if (state === 'error') {
+    splash.classList.add('error');
+    html = `
+      <div class="glyph-big">!</div>
+      <div class="auto-status">エラー</div>
+      <div class="auto-sub">${opts.message || '処理に失敗しました'}</div>
+      <div class="auto-actions">
+        <button class="btn" data-action="splash-open-app">アプリを開く</button>
+      </div>
+    `;
+  }
+  splash.innerHTML = html;
+}
+
+function hideAutoSplash() {
+  const splash = document.getElementById('auto-splash');
+  splash.style.display = 'none';
+}
+
+async function handleAutoAction(autoParam, doctorParam) {
+  // Determine doctor
+  let doctor = doctorParam || state.currentDoctor;
+  if (doctorParam && DOCTORS.includes(doctorParam)) {
+    doctor = doctorParam;
+    state.currentDoctor = doctor;
+    saveCurrentDoctor();
+    state.shifts = storageGet(STORAGE_KEYS.shifts(doctor), []);
+    state.cache = storageGet(STORAGE_KEYS.cache(doctor), { folderId: null, sheets: {} });
+  }
+  if (!doctor) {
+    showAutoSplash('error', { message: '医師が選択されていません。先にアプリで医師を選択してください。' });
+    return;
+  }
+
+  // Decide action
+  const open = getOpenShift();
+  let action;
+  if (autoParam === 'toggle') {
+    // Debounce: ignore if last action was within 1 minute
+    if (open) {
+      const sinceIn = (Date.now() - new Date(open.clockIn).getTime()) / 1000;
+      if (sinceIn < 60) {
+        showAutoSplash('error', { message: `${Math.round(sinceIn)}秒前に出勤したばかりです。誤操作防止のため処理しません。` });
+        return;
+      }
+      action = 'out';
+    } else {
+      // Check most recent shift's clockOut
+      const lastShift = [...state.shifts].sort((a, b) => new Date(b.clockOut || b.clockIn) - new Date(a.clockOut || a.clockIn))[0];
+      if (lastShift?.clockOut) {
+        const sinceOut = (Date.now() - new Date(lastShift.clockOut).getTime()) / 1000;
+        if (sinceOut < 60) {
+          showAutoSplash('error', { message: `${Math.round(sinceOut)}秒前に退勤したばかりです。誤操作防止のため処理しません。` });
+          return;
+        }
+      }
+      action = 'in';
+    }
+  } else if (autoParam === 'in') {
+    if (open) {
+      showAutoSplash('error', { message: '既に出勤中です。退勤を行ってください。' });
+      return;
+    }
+    action = 'in';
+  } else if (autoParam === 'out') {
+    if (!open) {
+      showAutoSplash('error', { message: '出勤記録がありません。先に出勤してください。' });
+      return;
+    }
+    action = 'out';
+  } else {
+    showAutoSplash('error', { message: '不明なパラメータです: ' + autoParam });
+    return;
+  }
+
+  showAutoSplash('processing');
+
+  // Execute action (record locally first, sync best-effort)
+  const now = new Date();
+  let session;
+  let synced = false;
+
+  if (action === 'in') {
+    session = {
+      id: 'sh_' + Date.now(),
+      clockIn: now.toISOString(),
+      clockOut: null,
+      syncedSheetIds: [],
+    };
+    state.shifts.push(session);
+    saveShifts();
+
+    if (state.settings.clientId) {
+      try {
+        await requestToken('');  // try silent
+        await syncClockIn(session);
+        synced = true;
+      } catch (e) {
+        console.warn('silent sync failed:', e);
+      }
+    }
+
+    showAutoSplash('in_success', {
+      time: formatTime(now),
+      doctor,
+      date: `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} (${formatWeekday(now)})`,
+      synced,
+    });
+  } else {
+    session = open;
+    session.clockOut = now.toISOString();
+    saveShifts();
+
+    if (state.settings.clientId) {
+      try {
+        await requestToken('');
+        await syncClockOut(session);
+        synced = true;
+      } catch (e) {
+        console.warn('silent sync failed:', e);
+      }
+    }
+
+    // Compute duration
+    const ms = new Date(session.clockOut) - new Date(session.clockIn);
+    const totalMin = Math.round(ms / 60000);
+    const dur = `${Math.floor(totalMin/60)}時間${totalMin%60}分`;
+
+    // Try to read updated total
