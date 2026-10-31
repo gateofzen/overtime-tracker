@@ -1450,7 +1450,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.10.31-k';
+const APP_VERSION = 'v2026.10.31-l';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -2356,14 +2356,15 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 
             { userEnteredValue: { numberValue: plannedHours },  userEnteredFormat: fmtPlanned },
             { userEnteredValue: { stringValue: '時間' },         userEnteredFormat: fmtLabel10R },
           ]},
-          // Row 2: blank | blank | C2=month | D2=月 | E2=80時間まで | F2==80-F1 | G2=時間
+          // Row 2: blank | blank | C2=month | D2=月 | E2=80時間まで | F2 remaining | G2=時間
+          // F2 = 80 - 予定時間外(F1) - 実績時間外合計(G35, time format so ×24 for hours)
           { values: [
             { userEnteredFormat: fmtName }, {},
-            { userEnteredValue: { numberValue: month },         userEnteredFormat: fmtMonth },
-            { userEnteredValue: { stringValue: '月' },          userEnteredFormat: fmtUnitMid },
-            { userEnteredValue: { stringValue: '80時間まで' },  userEnteredFormat: fmtLabel10R },
-            { userEnteredValue: { formulaValue: '=80-F1' },     userEnteredFormat: fmtRemain },
-            { userEnteredValue: { stringValue: '時間' },         userEnteredFormat: fmtLabel10R },
+            { userEnteredValue: { numberValue: month },               userEnteredFormat: fmtMonth },
+            { userEnteredValue: { stringValue: '月' },                userEnteredFormat: fmtUnitMid },
+            { userEnteredValue: { stringValue: '80時間まで' },        userEnteredFormat: fmtLabel10R },
+            { userEnteredValue: { formulaValue: '=80-F1-G35*24' },    userEnteredFormat: fmtRemain },
+            { userEnteredValue: { stringValue: '時間' },              userEnteredFormat: fmtLabel10R },
           ]},
           // Row 3: column headers (yellow background)
           { values: [
@@ -2487,19 +2488,44 @@ function buildInitRequests(year, month, doctorName, plannedHours = 0, sheetId = 
 }
 
 /* ================================================== Sheet orchestration ================================================== */
+// Ensure the F2 formula on an existing monthly sheet includes the running total
+// (G35*24). Older sheets had just '=80-F1' which didn't subtract actual overtime.
+// Called when opening an existing sheet so old sheets get upgraded silently.
+async function ensureF2FormulaUpToDate(spreadsheetId) {
+  const EXPECTED = '=80-F1-G35*24';
+  try {
+    const r = await sheetsValuesGet(spreadsheetId, 'F2', { valueRenderOption: 'FORMULA' });
+    const current = r.values?.[0]?.[0];
+    if (current && current !== EXPECTED && String(current).startsWith('=')) {
+      await sheetsValuesBatchUpdate(spreadsheetId, [
+        { range: 'F2', values: [[EXPECTED]] }
+      ], 'USER_ENTERED');
+      console.log(`[F2 migration] Updated '${current}' → '${EXPECTED}'`);
+    }
+  } catch (e) { console.warn('ensureF2FormulaUpToDate:', e); }
+}
+
 async function getOrCreateMonthlySheet(year, month) {
   const key = ymKey(year, month);
   // Check cache
   if (state.cache.sheets[key]) {
     try {
       const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files/${state.cache.sheets[key]}?fields=id,trashed`);
-      if (r && !r.trashed) return state.cache.sheets[key];
+      if (r && !r.trashed) {
+        // Opportunistic migration of F2 formula on cached sheet
+        ensureF2FormulaUpToDate(state.cache.sheets[key]).catch(() => {});
+        return state.cache.sheets[key];
+      }
     } catch {}
     delete state.cache.sheets[key];
   }
   const folderId = await ensureFolder();
   const sheetName = `${key}_${state.currentDoctor}`;
   let id = await findSheetInFolder(folderId, sheetName);
+  if (id) {
+    // Found existing sheet in Drive — migrate its F2 formula if needed
+    ensureF2FormulaUpToDate(id).catch(() => {});
+  }
   if (!id) {
     id = await createSheetInFolder(folderId, sheetName);
     // Try to read planned overtime from schedule JSON if available
