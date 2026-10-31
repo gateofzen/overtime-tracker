@@ -1112,7 +1112,7 @@
      will hide it immediately. -->
 <div id="static-boot-fallback" style="position:fixed;top:60px;left:10px;right:10px;background:#fee8e8;border:2px solid #c33;padding:14px;font-family:system-ui,sans-serif;font-size:13px;line-height:1.6;z-index:99999;border-radius:6px;max-height:85vh;overflow:auto;">
   <strong style="color:#c33;font-size:14px;">⚠ アプリの JavaScript が実行されていません</strong><br><br>
-  表示されている HTML のバージョン: <code>v2026.10.31-p</code><br>
+  表示されている HTML のバージョン: <code>v2026.10.31-q</code><br>
   このメッセージは「スクリプトが未実行」の時に見えます。<br><br>
   <strong>対処手順:</strong><br>
   1. URL末尾に <code>?nocache=1</code> を付けてリロード<br>
@@ -1436,6 +1436,7 @@
 <div class="auto-splash" id="auto-splash" style="display:none;"></div>
 
 <!-- Google Identity Services -->
+<script>console.log('[test-pre] Script execution works. HTML parsed to this point.');</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
@@ -1465,7 +1466,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.10.31-p';
+const APP_VERSION = 'v2026.10.31-q';
 console.log(`[boot] Overtime Tracker ${APP_VERSION} — script loaded at ${new Date().toISOString()}`);
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
@@ -5336,20 +5337,3 @@ async function handleAutoAction(autoParam, doctorParam) {
       time: formatTime(now),
       doctor,
       date: `${now.getFullYear()}/${pad(now.getMonth()+1)}/${pad(now.getDate())} (${formatWeekday(now)})`,
-      synced,
-    });
-  } else {
-    session = open;
-    session.clockOut = now.toISOString();
-    saveShifts();
-
-    if (state.settings.clientId) {
-      try {
-        await requestToken('');
-        await syncClockOut(session);
-        synced = true;
-      } catch (e) {
-        console.warn('silent sync failed:', e);
-      }
-    }
-
