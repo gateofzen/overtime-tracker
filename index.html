@@ -1450,7 +1450,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.19-j';
+const APP_VERSION = 'v2026.10.31-k';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -3969,7 +3969,23 @@ async function computeAttendanceData(year, month) {
   // 1. Read C, D, E, F columns from the month's spreadsheet
   let cCol = [], dCol = [], eCol = [], fCol = [];
   const monthKey = ymKey(year, month);
-  const sid = state.cache.sheets[monthKey];
+  let sid = state.cache.sheets[monthKey];
+  // When running on a different device from the one that originally created the
+  // month's spreadsheet, state.cache.sheets won't have the ID. Look it up in Drive
+  // so we can still read D/F columns for reconstruction.
+  if (!sid && isAuthed()) {
+    try {
+      const folderId = await ensureFolder();
+      const sheetName = `${year}-${pad(month)}_${state.currentDoctor}`;
+      const found = await findSheetInFolder(folderId, sheetName);
+      if (found) {
+        sid = found;
+        state.cache.sheets[monthKey] = sid;
+        saveCache();
+        console.log(`[computeAttendanceData] Found month sheet via Drive lookup: ${sheetName}`);
+      }
+    } catch (e) { console.warn('month sheet Drive lookup:', e); }
+  }
   if (sid && isAuthed()) {
     try {
       const r = await sheetsValuesBatchGet(sid, ['C4:C34', 'D4:D34', 'E4:E34', 'F4:F34']);
@@ -4543,15 +4559,17 @@ function buildAttendanceRequests(year, month, doctorName, dailyData, sheetId) {
   // compare directly without TIMEVALUE conversion:
   //   slotFraction = (COLUMN() - 6) * 10 / 1440   ← "F" column is COLUMN() = 6
   //
-  // Handling of blank cells (夜勤日/明け日/週休日):
-  //   - IF($D4="", ...) uses TRUE as unbounded lower bound
-  //   - IF($E4="", ...) uses TRUE as unbounded upper bound
-  //   - OR($D4<>"", $E4<>"") ensures fully blank rows (週休日) are not colored
+  // Four cases:
+  //   D=""  E=""  → not colored (週休日 / unused day)
+  //   D=""  E=v   → color 0:00..E  (明け日)
+  //   D=v   E=""  → NOT colored  (日勤未退勤など、終了時刻未確定)
+  //   D=v   E=v   → color D..E   (normal case)
+  // Rule out the D-only case explicitly, otherwise it would color everything from D..24:00.
   const formula =
     '=AND(' +
-      'OR($D4<>"",$E4<>""),' +
-      'IF($D4="",TRUE,(COLUMN()-6)*10/1440>=$D4),' +
-      'IF($E4="",TRUE,(COLUMN()-6)*10/1440<$E4)' +
+      '$E4<>"",' +                                  // E must have a value — otherwise skip
+      '(COLUMN()-6)*10/1440<$E4,' +                 // slot < E
+      'IF($D4="",TRUE,(COLUMN()-6)*10/1440>=$D4)' + // slot >= D (or D empty = unbounded)
     ')';
   requests.push({
     addConditionalFormatRule: {
