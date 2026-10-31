@@ -1107,6 +1107,21 @@
 </head>
 <body>
 
+<!-- Static fallback: if JavaScript never runs or init() silently fails, this stays visible.
+     The init() function sets its display to 'none' as its first action, so a successful boot
+     will hide it immediately. -->
+<div id="static-boot-fallback" style="position:fixed;top:60px;left:10px;right:10px;background:#fee8e8;border:2px solid #c33;padding:14px;font-family:system-ui,sans-serif;font-size:13px;line-height:1.6;z-index:99999;border-radius:6px;max-height:85vh;overflow:auto;">
+  <strong style="color:#c33;font-size:14px;">⚠ アプリの JavaScript が実行されていません</strong><br><br>
+  表示されている HTML のバージョン: <code>v2026.10.31-p</code><br>
+  このメッセージは「スクリプトが未実行」の時に見えます。<br><br>
+  <strong>対処手順:</strong><br>
+  1. URL末尾に <code>?nocache=1</code> を付けてリロード<br>
+  2. Chrome の設定 → プライバシー → 閲覧履歴データの削除 → 「キャッシュされた画像とファイル」<br>
+  3. シークレットウィンドウで開く<br>
+  4. それでも消えない → Console (F12) のエラーを送ってください<br><br>
+  <button onclick="document.getElementById('static-boot-fallback').style.display='none'" style="padding:6px 14px;background:#fff;border:1px solid #c33;color:#c33;border-radius:4px;cursor:pointer;">このメッセージを閉じる</button>
+</div>
+
 <div class="container">
   <header class="app-title">
     <span class="glyph">時</span>
@@ -1450,7 +1465,8 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.10.31-o';
+const APP_VERSION = 'v2026.10.31-p';
+console.log(`[boot] Overtime Tracker ${APP_VERSION} — script loaded at ${new Date().toISOString()}`);
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -5337,9 +5353,3 @@ async function handleAutoAction(autoParam, doctorParam) {
       }
     }
 
-    // Compute duration
-    const ms = new Date(session.clockOut) - new Date(session.clockIn);
-    const totalMin = Math.round(ms / 60000);
-    const dur = `${Math.floor(totalMin/60)}時間${totalMin%60}分`;
-
-    // Try to read updated total
