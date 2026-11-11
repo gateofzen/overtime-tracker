@@ -1107,21 +1107,6 @@
 </head>
 <body>
 
-<!-- Static fallback: if JavaScript never runs or init() silently fails, this stays visible.
-     The init() function sets its display to 'none' as its first action, so a successful boot
-     will hide it immediately. -->
-<div id="static-boot-fallback" style="position:fixed;top:60px;left:10px;right:10px;background:#fee8e8;border:2px solid #c33;padding:14px;font-family:system-ui,sans-serif;font-size:13px;line-height:1.6;z-index:99999;border-radius:6px;max-height:85vh;overflow:auto;">
-  <strong style="color:#c33;font-size:14px;">⚠ アプリの JavaScript が実行されていません</strong><br><br>
-  表示されている HTML のバージョン: <code>v2026.10.31-q</code><br>
-  このメッセージは「スクリプトが未実行」の時に見えます。<br><br>
-  <strong>対処手順:</strong><br>
-  1. URL末尾に <code>?nocache=1</code> を付けてリロード<br>
-  2. Chrome の設定 → プライバシー → 閲覧履歴データの削除 → 「キャッシュされた画像とファイル」<br>
-  3. シークレットウィンドウで開く<br>
-  4. それでも消えない → Console (F12) のエラーを送ってください<br><br>
-  <button onclick="document.getElementById('static-boot-fallback').style.display='none'" style="padding:6px 14px;background:#fff;border:1px solid #c33;color:#c33;border-radius:4px;cursor:pointer;">このメッセージを閉じる</button>
-</div>
-
 <div class="container">
   <header class="app-title">
     <span class="glyph">時</span>
@@ -1399,6 +1384,16 @@
     </div>
 
     <div class="card">
+      <h2 class="section-title">勤務表の保存場所</h2>
+      <p class="ink-soft" style="font-size:13px;line-height:1.7;margin-bottom:12px;">
+        勤務表 JSON は Google Drive の <code>時間外勤務 / schedules</code> フォルダに保存されています。各月のファイル名は <code>month_YYYY-MM.json</code>。
+      </p>
+      <p class="ink-soft" style="font-size:12px;line-height:1.6;">
+        <strong>月次の更新手順</strong>: 新しい月の勤務表 JSON を上記フォルダにアップロード(または既存ファイルを上書き)するだけで、全デバイス・全医師に即反映されます。アプリの再読み込みは不要です(各月のキャッシュは次回参照時にクリアされます)。
+      </p>
+    </div>
+
+    <div class="card">
       <h2 class="section-title">打刻ログの同期</h2>
       <p class="ink-soft" style="font-size:13px;margin-bottom:14px;">
         打刻データ (出勤/退勤時刻) を Google ドライブに保存し、他のデバイスと共有します。
@@ -1436,7 +1431,6 @@
 <div class="auto-splash" id="auto-splash" style="display:none;"></div>
 
 <!-- Google Identity Services -->
-<script>console.log('[test-pre] Script execution works. HTML parsed to this point.');</script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
@@ -1444,7 +1438,9 @@
 
 /* ================================================== Constants ================================================== */
 const DOCTORS = ['提嶋', '遠藤', '前川', '小舘', '森木', '中嶋', '福原', '上島', '原', '富田'];
-const DEFAULT_SCHEDULE_URL = 'https://raw.githubusercontent.com/gateofzen/schedule-storage/main/';
+// (Legacy) The schedule used to be fetched from a public GitHub repo. Now the
+// schedule JSONs live in Google Drive under <時間外勤務>/schedules/ — see fetchSchedule().
+// Kept as a comment for reference: 'https://raw.githubusercontent.com/gateofzen/schedule-storage/main/'
 const DEFAULT_CLIENT_ID = '626776231016-51k8d3ckbm8ovvrjpjkiruakfalsstgi.apps.googleusercontent.com'; // Embedded default; can be overridden in settings
 // Shared Cloudflare Worker (OAuth proxy) — provides refresh_token flow for all doctors.
 // Managed by 前川. Individual users can override with their own Worker URL in settings
@@ -1466,8 +1462,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.10.31-q';
-console.log(`[boot] Overtime Tracker ${APP_VERSION} — script loaded at ${new Date().toISOString()}`);
+const APP_VERSION = 'v2026.11.11-a';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -2068,26 +2063,29 @@ function signOut() {
 }
 
 /* ================================================== HTTP helper ================================================== */
-async function gApi(method, url, body, retry = true) {
+async function gApi(method, url, body, retry = true, opts2 = null) {
   const token = await ensureToken();
   const opts = {
     method,
     headers: { 'Authorization': `Bearer ${token}` },
   };
-  if (body !== undefined) {
+  if (body !== undefined && body !== null) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
   const res = await fetch(url, opts);
   if (res.status === 401 && retry) {
     state.auth.accessToken = null;
-    return gApi(method, url, body, false);
+    return gApi(method, url, body, false, opts2);
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`API ${res.status}: ${text.slice(0, 300)}`);
   }
   if (res.status === 204) return null;
+  // opts2.raw returns the text body (for alt=media downloads where response may
+  // or may not be JSON). The caller decides how to parse.
+  if (opts2 && opts2.raw) return res.text();
   return res.json();
 }
 
@@ -2632,14 +2630,66 @@ function shiftFromSchedule(date, doctor, sched) {
   return null;
 }
 
+// Name of the subfolder inside 時間外勤務 that holds monthly schedule JSONs.
+// Each month's schedule is a single file: month_YYYY-MM.json, same shape as the
+// previous schedule-storage repo files.
+const SCHEDULE_SUBFOLDER = 'schedules';
+
+// Cache the schedule subfolder id to avoid repeated Drive lookups
+let _scheduleFolderIdCache = null;
+
+async function ensureScheduleSubfolder() {
+  if (_scheduleFolderIdCache) {
+    try {
+      const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files/${_scheduleFolderIdCache}?fields=id,trashed`);
+      if (r && !r.trashed) return _scheduleFolderIdCache;
+    } catch {}
+    _scheduleFolderIdCache = null;
+  }
+  const parentId = await ensureFolder();
+  // Look up existing schedules subfolder
+  const q = encodeURIComponent(
+    `name='${SCHEDULE_SUBFOLDER}' and '${parentId}' in parents ` +
+    `and mimeType='application/vnd.google-apps.folder' and trashed=false`
+  );
+  const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  let id = r.files?.[0]?.id;
+  if (!id) {
+    // Create it if missing (first time)
+    const created = await gApi('POST', 'https://www.googleapis.com/drive/v3/files', {
+      name: SCHEDULE_SUBFOLDER,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [parentId],
+    });
+    id = created.id;
+  }
+  _scheduleFolderIdCache = id;
+  return id;
+}
+
+async function findScheduleFileId(subfolderId, fileName) {
+  const q = encodeURIComponent(
+    `name='${fileName}' and '${subfolderId}' in parents ` +
+    `and mimeType='application/json' and trashed=false`
+  );
+  const r = await gApi('GET', `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`);
+  return r.files?.[0]?.id || null;
+}
+
+// Fetch monthly schedule JSON from Google Drive.
+// Location: <時間外勤務>/schedules/month_YYYY-MM.json
+// Requires authentication — if the user isn't signed in, the schedule can't be read.
 async function fetchSchedule(year, month) {
   const key = ymKey(year, month);
   if (state.scheduleCache[key]) return state.scheduleCache[key];
-  const sep = DEFAULT_SCHEDULE_URL.endsWith('/') ? '' : '/';
-  const url = `${DEFAULT_SCHEDULE_URL}${sep}month_${key}.json`;
-  const res = await fetch(url, { cache: 'no-cache' });
-  if (!res.ok) throw new Error(`勤務表取得失敗 (${res.status})`);
-  const data = await res.json();
+  if (!isAuthed()) throw new Error('勤務表取得にはGoogleサインインが必要です');
+  const fileName = `month_${key}.json`;
+  const subfolderId = await ensureScheduleSubfolder();
+  const fileId = await findScheduleFileId(subfolderId, fileName);
+  if (!fileId) throw new Error(`勤務表が見つかりません: ${fileName}`);
+  // Download the file content via Drive API (alt=media returns raw bytes)
+  const res = await gApi('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, null, true, { raw: true });
+  const data = typeof res === 'string' ? JSON.parse(res) : res;
   state.scheduleCache[key] = data;
   return data;
 }
@@ -5484,10 +5534,6 @@ function bindEvents() {
 }
 
 function init() {
-  console.log(`[init] starting ${APP_VERSION}`);
-  // Hide the static boot fallback — if we got here, JS is executing fine so far
-  const fb = document.getElementById('static-boot-fallback');
-  if (fb) fb.style.display = 'none';
   loadSettings();
   loadDoctorState();
   loadPersistedAuth();  // Restore access token / refresh token from previous session
@@ -5615,10 +5661,7 @@ function init() {
   }, 1000);
 }
 
-console.log('[test-post] Main script finished parsing and defining functions.');
-
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('[test-domready] DOMContentLoaded fired, calling init()');
   try {
     init();
   } catch (e) {
