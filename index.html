@@ -1469,7 +1469,9 @@ const DEFAULT_WORKER_URL = 'https://overtime-oauth-proxy.gateofzen.workers.dev';
 // picked them via the Picker. Maekawa creates one API key in Cloud Console
 // (restricted to HTTP referrer gateofzen.github.io) and pastes it here.
 // Each doctor then uses the Picker once to grant the app access to the shared folder.
-const DEFAULT_PICKER_API_KEY = '';  // ← fill after creating API key, see Settings tab for instructions
+// Restricted to HTTP referrer https://gateofzen.github.io/* and Google Picker API only.
+// Safe to embed publicly — even if copied, it cannot be used from other origins or for other APIs.
+const DEFAULT_PICKER_API_KEY = 'AIzaSyC-AqRbCqUC3iZ2ANJxEF9g6GrUDV_5wnk';
 // Project number extracted from the OAuth client ID (prefix before the dash)
 const APP_PROJECT_NUMBER = '626776231016';
 
@@ -1488,7 +1490,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.11-b';
+const APP_VERSION = 'v2026.11.11-c';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
