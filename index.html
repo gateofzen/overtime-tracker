@@ -1386,10 +1386,28 @@
     <div class="card">
       <h2 class="section-title">勤務表の保存場所</h2>
       <p class="ink-soft" style="font-size:13px;line-height:1.7;margin-bottom:12px;">
-        勤務表 JSON は Google Drive の <code>時間外勤務 / schedules</code> フォルダに保存されています。各月のファイル名は <code>month_YYYY-MM.json</code>。
+        勤務表 JSON は Google Drive の <code>時間外勤務 / schedules</code> フォルダに保存されます。各月のファイル名は <code>month_YYYY-MM.json</code>。
       </p>
-      <p class="ink-soft" style="font-size:12px;line-height:1.6;">
-        <strong>月次の更新手順</strong>: 新しい月の勤務表 JSON を上記フォルダにアップロード(または既存ファイルを上書き)するだけで、全デバイス・全医師に即反映されます。アプリの再読み込みは不要です(各月のキャッシュは次回参照時にクリアされます)。
+
+      <div style="margin:14px 0;padding:10px 12px;background:var(--paper-soft);border-radius:4px;">
+        <p id="shared-folder-status" style="font-size:12px;line-height:1.6;margin:0 0 10px 0;">共有フォルダ未設定</p>
+        <div class="btn-row">
+          <button class="btn outline" data-action="pick-shared-folder">📁 共有フォルダを選択</button>
+          <button class="btn outline" data-action="clear-shared-folder">解除</button>
+        </div>
+      </div>
+
+      <div class="field" style="margin-top:14px;">
+        <label>Picker API キー (共有フォルダ機能を使う場合)</label>
+        <input type="text" id="picker-api-key-input" placeholder="AIzaSy...">
+        <p class="ink-mute" style="font-size:11px;margin-top:6px;line-height:1.5;">
+          共有フォルダを使うには、Google Cloud Console で API キーを作成し、<strong>HTTP リファラー制限</strong> を <code>https://gateofzen.github.io/*</code> に設定、<strong>Picker API</strong> を許可してください。<br>
+          各医師が同じキーを設定することで、前川さんが共有した勤務表フォルダを参照できるようになります。
+        </p>
+      </div>
+
+      <p class="ink-soft" style="font-size:12px;line-height:1.6;margin-top:14px;">
+        <strong>運用フロー</strong>: 前川さんが自分の Drive に勤務表 JSON をアップロード(または上書き)し、<code>schedules</code> フォルダを他の医師に共有。各医師は上の「共有フォルダを選択」で前川さんの共有フォルダを初回に選ぶだけで、以後は毎月の更新が自動反映されます。
       </p>
     </div>
 
@@ -1446,6 +1464,14 @@ const DEFAULT_CLIENT_ID = '626776231016-51k8d3ckbm8ovvrjpjkiruakfalsstgi.apps.go
 // Managed by 前川. Individual users can override with their own Worker URL in settings
 // if they prefer, but the default works out-of-the-box.
 const DEFAULT_WORKER_URL = 'https://overtime-oauth-proxy.gateofzen.workers.dev';
+// Google Picker API key — needed for the "Select shared schedule folder" feature.
+// drive.file scope cannot list files shared with the user unless they explicitly
+// picked them via the Picker. Maekawa creates one API key in Cloud Console
+// (restricted to HTTP referrer gateofzen.github.io) and pastes it here.
+// Each doctor then uses the Picker once to grant the app access to the shared folder.
+const DEFAULT_PICKER_API_KEY = '';  // ← fill after creating API key, see Settings tab for instructions
+// Project number extracted from the OAuth client ID (prefix before the dash)
+const APP_PROJECT_NUMBER = '626776231016';
 
 const FOLDER_NAME = '時間外勤務';
 // Scopes: drive.file is per-file (only files this app created), email/openid/profile
@@ -1462,7 +1488,7 @@ const STORAGE_KEYS = {
 const WEEKDAY_JP = ['日','月','火','水','木','金','土'];
 const MIN_PER_DAY = 24 * 60;
 const FRACTION = (h, m) => (h * 60 + m) / MIN_PER_DAY;
-const APP_VERSION = 'v2026.11.11-a';
+const APP_VERSION = 'v2026.11.11-b';
 const CAP_30MIN = 30 / MIN_PER_DAY;
 
 /* ================================================== State ================================================== */
@@ -1503,6 +1529,9 @@ function loadSettings() {
     // If user explicitly set it to '' (empty), respect that choice (they may have
     // opted out of PKCE flow on purpose).
     workerUrl:       (s?.workerUrl !== undefined) ? s.workerUrl : DEFAULT_WORKER_URL,
+    pickerApiKey:    (s?.pickerApiKey)    || DEFAULT_PICKER_API_KEY,
+    sharedScheduleFolderId:   s?.sharedScheduleFolderId   || null,
+    sharedScheduleFolderName: s?.sharedScheduleFolderName || null,
     geoEnabled:      !!(s?.geoEnabled),
     hospitalLat:     (s?.hospitalLat)     || null,
     hospitalLng:     (s?.hospitalLng)     || null,
@@ -2630,6 +2659,96 @@ function shiftFromSchedule(date, doctor, sched) {
   return null;
 }
 
+/* ================================================== Google Picker ================================================== */
+// Picker SDK is loaded on demand only when the user clicks "Select shared folder".
+// It requires an API key (DEFAULT_PICKER_API_KEY or state.settings.pickerApiKey).
+let _pickerSdkPromise = null;
+function loadPickerSdk() {
+  if (_pickerSdkPromise) return _pickerSdkPromise;
+  _pickerSdkPromise = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://apis.google.com/js/api.js';
+    s.onload = () => {
+      // gapi.load is sync-callback based
+      window.gapi.load('picker', () => resolve());
+    };
+    s.onerror = () => reject(new Error('Picker SDK の読み込みに失敗'));
+    document.head.appendChild(s);
+  });
+  return _pickerSdkPromise;
+}
+
+async function pickSharedScheduleFolder() {
+  const apiKey = state.settings.pickerApiKey || DEFAULT_PICKER_API_KEY;
+  if (!apiKey) {
+    toast('Picker API キー が未設定です。設定タブで入力してください', 'error');
+    return;
+  }
+  if (!isAuthed()) {
+    toast('Google サインインが必要です', 'error');
+    return;
+  }
+  try {
+    await loadPickerSdk();
+    const token = await ensureToken();
+    // Two views so the user can pick either a folder they own, or one shared with them.
+    const mineView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true)
+      .setMimeTypes('application/vnd.google-apps.folder');
+    const sharedView = new window.google.picker.DocsView(window.google.picker.ViewId.FOLDERS)
+      .setOwnedByMe(false)
+      .setIncludeFolders(true)
+      .setSelectFolderEnabled(true)
+      .setMimeTypes('application/vnd.google-apps.folder');
+    const picker = new window.google.picker.PickerBuilder()
+      .addView(mineView)
+      .addView(sharedView)
+      .setOAuthToken(token)
+      .setDeveloperKey(apiKey)
+      .setAppId(APP_PROJECT_NUMBER)
+      .setTitle('共有スケジュールフォルダを選択')
+      .setCallback((data) => {
+        if (data.action === window.google.picker.Action.PICKED) {
+          const folder = data.docs[0];
+          state.settings.sharedScheduleFolderId = folder.id;
+          state.settings.sharedScheduleFolderName = folder.name;
+          saveSettings();
+          // Clear cached schedules so the next lookup goes to the newly picked folder
+          state.scheduleCache = {};
+          toast(`共有フォルダを設定しました: ${folder.name}`, 'success');
+          updateSharedScheduleStatus();
+        }
+      })
+      .build();
+    picker.setVisible(true);
+  } catch (e) {
+    console.error('Picker error:', e);
+    toast('フォルダ選択失敗: ' + e.message, 'error');
+  }
+}
+
+function clearSharedScheduleFolder() {
+  state.settings.sharedScheduleFolderId = null;
+  state.settings.sharedScheduleFolderName = null;
+  saveSettings();
+  state.scheduleCache = {};
+  toast('共有フォルダ設定を解除しました', 'success');
+  updateSharedScheduleStatus();
+}
+
+function updateSharedScheduleStatus() {
+  const el = document.getElementById('shared-folder-status');
+  if (!el) return;
+  const name = state.settings.sharedScheduleFolderName;
+  const id = state.settings.sharedScheduleFolderId;
+  if (name && id) {
+    el.innerHTML = `✓ 共有フォルダ: <strong>${name}</strong> <br><span style="color:var(--ink-mute);font-size:11px;">ID: ${id.substring(0, 20)}…</span>`;
+  } else {
+    el.innerHTML = '<span style="color:var(--ink-mute);">共有フォルダ未設定 — 自分の Drive からのみ読み込みます</span>';
+  }
+}
+
 // Name of the subfolder inside 時間外勤務 that holds monthly schedule JSONs.
 // Each month's schedule is a single file: month_YYYY-MM.json, same shape as the
 // previous schedule-storage repo files.
@@ -2677,17 +2796,36 @@ async function findScheduleFileId(subfolderId, fileName) {
 }
 
 // Fetch monthly schedule JSON from Google Drive.
-// Location: <時間外勤務>/schedules/month_YYYY-MM.json
-// Requires authentication — if the user isn't signed in, the schedule can't be read.
+// Search order:
+//   1. Shared folder (if user has picked one via Picker) — this is where 前川 uploads
+//      the monthly schedules, so other doctors get them automatically
+//   2. Own Drive at <時間外勤務>/schedules/month_YYYY-MM.json — fallback for standalone use
+// Requires authentication.
 async function fetchSchedule(year, month) {
   const key = ymKey(year, month);
   if (state.scheduleCache[key]) return state.scheduleCache[key];
   if (!isAuthed()) throw new Error('勤務表取得にはGoogleサインインが必要です');
   const fileName = `month_${key}.json`;
+
+  // Try shared folder first (if configured via Picker)
+  if (state.settings.sharedScheduleFolderId) {
+    try {
+      const fileId = await findScheduleFileId(state.settings.sharedScheduleFolderId, fileName);
+      if (fileId) {
+        const res = await gApi('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, null, true, { raw: true });
+        const data = typeof res === 'string' ? JSON.parse(res) : res;
+        state.scheduleCache[key] = data;
+        return data;
+      }
+    } catch (e) {
+      console.warn(`[fetchSchedule] shared folder lookup failed (will fall back to own Drive):`, e);
+    }
+  }
+
+  // Fall back to own Drive's schedules subfolder
   const subfolderId = await ensureScheduleSubfolder();
   const fileId = await findScheduleFileId(subfolderId, fileName);
   if (!fileId) throw new Error(`勤務表が見つかりません: ${fileName}`);
-  // Download the file content via Drive API (alt=media returns raw bytes)
   const res = await gApi('GET', `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, null, true, { raw: true });
   const data = typeof res === 'string' ? JSON.parse(res) : res;
   state.scheduleCache[key] = data;
@@ -3611,11 +3749,14 @@ function showView(name) {
   if (name === 'settings') {
     document.getElementById('client-id-input').value = state.settings.clientId || '';
     document.getElementById('worker-url-input').value = state.settings.workerUrl || '';
+    const pickerInput = document.getElementById('picker-api-key-input');
+    if (pickerInput) pickerInput.value = state.settings.pickerApiKey || '';
     document.getElementById('geo-enabled').checked = !!state.settings.geoEnabled;
     document.getElementById('geo-radius').value = state.settings.geoRadius || 150;
     updateGeoStatus();
     updateShortcutUrls();
     updateAuthStatusDisplay();
+    updateSharedScheduleStatus();
     // Show the origin the user needs to whitelist in Cloud Console
     const originDisplay = document.getElementById('app-origin-display');
     if (originDisplay) originDisplay.textContent = window.location.origin;
@@ -4955,16 +5096,25 @@ function specifyTimeAction() {
 
 
 function handleSaveClientId() {
-  state.settings.clientId = document.getElementById('client-id-input').value.trim();
+  const newClientId = document.getElementById('client-id-input').value.trim();
+  const clientIdChanged = newClientId !== state.settings.clientId;
+  state.settings.clientId = newClientId;
   const workerInput = document.getElementById('worker-url-input');
   if (workerInput) state.settings.workerUrl = workerInput.value.trim().replace(/\/$/, '');
+  const pickerInput = document.getElementById('picker-api-key-input');
+  if (pickerInput) state.settings.pickerApiKey = pickerInput.value.trim();
   saveSettings();
-  // Reset token client to use new ID
-  state.auth.tokenClient = null;
-  state.auth.accessToken = null;
-  state.auth.expiresAt = 0;
-  toast('保存しました。再度サインインしてください', 'success');
-  setSyncStatus('offline');
+  // Only reset auth state when the client ID actually changed. Otherwise saving
+  // after changing just the worker URL or Picker key shouldn't log the user out.
+  if (clientIdChanged) {
+    state.auth.tokenClient = null;
+    state.auth.accessToken = null;
+    state.auth.expiresAt = 0;
+    toast('保存しました。Client ID が変わったので再度サインインしてください', 'success');
+    setSyncStatus('offline');
+  } else {
+    toast('保存しました', 'success');
+  }
 }
 
 /* ================================================== Auth flow ================================================== */
@@ -5487,6 +5637,8 @@ function bindEvents() {
       case 'resync-all':          resyncAll().catch(err => toast(err.message, 'error')); break;
       case 'signin':              startSignIn(); break;
       case 'goto-settings':       showView('settings'); break;
+      case 'pick-shared-folder':  pickSharedScheduleFolder(); break;
+      case 'clear-shared-folder': clearSharedScheduleFolder(); break;
       case 'run-diagnostics':     runDiagnostics(); break;
       case 'signout':             signOut(); break;
       case 'save-client-id':      handleSaveClientId(); break;
